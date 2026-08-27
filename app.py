@@ -22,98 +22,137 @@ SECRET_SALT = "MySecretKey2026"  # 專屬私鑰 (防偽簽名)
 # 2. 全局雲端裝置綁定資料庫 (0 延遲記憶體快取)
 @st.cache_resource
 def get_device_registry():
+    # 結構: {token: {"user_name": str, "issue_date": str, "dev_id": str, "bound_at": str}}
     return {}
 
+def get_client_fingerprint():
+    """獲取客戶端裝置指紋 (防止跨裝置轉發)"""
+    try:
+        ua = st.context.headers.get("User-Agent", "default_ua")
+        return hashlib.md5(ua.encode()).hexdigest()[:10]
+    except Exception:
+        return "device_default"
+
 def generate_vip_token(user_name: str, issue_date: date = None) -> str:
+    """生成精簡版通行碼 (格式: 會員名_4碼簽名，例如 TEST1_A04E)"""
     if not issue_date:
         issue_date = date.today()
     user_clean = user_name.strip().replace(" ", "").upper()
     date_str = issue_date.strftime("%Y-%m-%d")
-    mmdd = issue_date.strftime("%m%d")
     sig = hashlib.sha256(f"{user_clean}_{date_str}_{SECRET_SALT}".encode()).hexdigest()[:4].upper()
-    return f"VIP_{user_clean}_{mmdd}_{sig}"
+    return f"{user_clean}_{sig}"
 
 def parse_and_validate_token(token: str):
-    if token == MASTER_PASSCODE:
-        return True, "ADMIN", date.today(), 999
+    """智慧滾動驗證：自動比對過去 7 天簽名，兼顧極簡格式與 7 天效期"""
+    clean_token = token.strip().upper()
+    if clean_token == MASTER_PASSCODE:
+        return True, "管理員", date.today(), 999
         
-    parts = token.split("_")
-    if len(parts) != 4 or parts[0] != "VIP":
+    if "_" not in clean_token:
         return False, None, None, 0
         
-    user_name, mmdd, sig = parts[1], parts[2], parts[3]
-    curr_year = date.today().year
-    try:
-        issue_dt = datetime.strptime(f"{curr_year}{mmdd}", "%Y%m%d").date()
-    except ValueError:
+    parts = clean_token.rsplit("_", 1)
+    user_name, sig = parts[0], parts[1]
+    
+    if len(sig) != 4 or not user_name:
         return False, None, None, 0
         
-    expected_sig = hashlib.sha256(f"{user_name}_{issue_dt.strftime('%Y-%m-%d')}_{SECRET_SALT}".encode()).hexdigest()[:4].upper()
-    if sig != expected_sig:
-        return False, None, None, 0
-        
-    days_elapsed = (date.today() - issue_dt).days
-    if days_elapsed < 0 or days_elapsed >= 8:
-        return False, user_name, issue_dt, 0
-    else:
-        remaining_days = 7 - days_elapsed
-        return True, user_name, issue_dt, remaining_days
+    today = date.today()
+    # 檢查今天與過去 7 天 (共 8 天有效期)
+    for i in range(8):
+        check_date = today - timedelta(days=i)
+        date_str = check_date.strftime("%Y-%m-%d")
+        expected_sig = hashlib.sha256(f"{user_name}_{date_str}_{SECRET_SALT}".encode()).hexdigest()[:4].upper()
+        if sig == expected_sig:
+            remaining_days = 7 - i
+            return True, user_name, check_date, remaining_days
+            
+    return False, None, None, 0
 
 # ================= 一機一碼核心驗證邏輯 =================
 registry = get_device_registry()
 url_vip = st.query_params.get("vip", "").strip().upper()
-url_dev = st.query_params.get("dev", "").strip()
+dev_fp = get_client_fingerprint()
 
 auth_msg = ""
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
     st.session_state["is_admin"] = False
     st.session_state["user_name"] = ""
+    st.session_state["current_token"] = ""
+    st.session_state["days_left"] = 0
 
-if url_vip:
-    if url_vip == MASTER_PASSCODE:
+def try_authenticate(input_token: str):
+    """通用驗證核心：支援 URL 帶入與登入框手動輸入"""
+    clean = input_token.strip().upper()
+    if not clean:
+        return False, "請輸入通行碼！"
+        
+    if clean == MASTER_PASSCODE:
         st.session_state["authenticated"] = True
         st.session_state["is_admin"] = True
         st.session_state["user_name"] = "管理員"
+        st.session_state["current_token"] = MASTER_PASSCODE
+        st.query_params["vip"] = MASTER_PASSCODE
+        return True, "管理員登入成功！"
+        
+    is_valid, u_name, issue_dt, rem_days = parse_and_validate_token(clean)
+    if not is_valid:
+        return False, "⛔ 通行碼無效或已過期 (7 天有效)，請向管理員領取最新通行碼！"
+        
+    # 一機一碼檢查
+    if clean not in registry:
+        registry[clean] = {
+            "user_name": u_name,
+            "issue_date": issue_dt.strftime("%Y-%m-%d"),
+            "dev_id": dev_fp,
+            "bound_at": datetime.now().strftime("%m-%d %H:%M")
+        }
     else:
-        is_valid, u_name, issue_dt, rem_days = parse_and_validate_token(url_vip)
-        if not is_valid:
-            auth_msg = "⛔ 通行碼已失效或過期 (有效期限 7 天)，請聯繫管理員續期！"
-        else:
-            if url_vip not in registry:
-                client_dev_id = hashlib.md5(f"{url_vip}_{time.time()}_{np.random.rand()}".encode()).hexdigest()[:12]
-                registry[url_vip] = {
-                    "dev_id": client_dev_id,
-                    "user_name": u_name,
-                    "issue_date": issue_dt.strftime("%Y-%m-%d"),
-                    "bound_at": datetime.now().strftime("%m-%d %H:%M")
-                }
-                st.query_params["dev"] = client_dev_id
-                st.session_state["authenticated"] = True
-                st.session_state["user_name"] = u_name
-                st.session_state["days_left"] = rem_days
-            else:
-                bound_info = registry[url_vip]
-                if url_dev == bound_info["dev_id"]:
-                    st.session_state["authenticated"] = True
-                    st.session_state["user_name"] = u_name
-                    st.session_state["days_left"] = rem_days
-                else:
-                    auth_msg = "⛔ 訪問被拒：此 VIP 專屬連結已被其他手機綁定！嚴禁轉傳分享。"
+        bound_dev = registry[clean].get("dev_id", "")
+        if bound_dev and bound_dev != dev_fp and bound_dev != "device_default":
+            return False, "⛔ 訪問被拒：此 VIP 代碼已綁定其他手機，嚴禁轉傳！若更換手機請聯繫管理員解綁。"
+            
+    st.session_state["authenticated"] = True
+    st.session_state["is_admin"] = False
+    st.session_state["user_name"] = u_name
+    st.session_state["current_token"] = clean
+    st.session_state["days_left"] = rem_days
+    st.query_params["vip"] = clean
+    return True, "驗證成功！"
+
+# 自動檢查 URL 參數
+if not st.session_state["authenticated"] and url_vip:
+    ok, msg = try_authenticate(url_vip)
+    if not ok:
+        auth_msg = msg
 
 # ================= 模組一：歐洲足球量化引擎 =================
 BASE_SOCCER_ELO = {
+    # 西甲
     "Real Madrid": 2010.0, "Barcelona": 1935.0, "Atletico Madrid": 1865.0, "Girona": 1785.0,
     "Athletic Club": 1805.0, "Athletic": 1805.0, "Real Sociedad": 1775.0, "Villarreal": 1775.0,
     "Real Betis": 1745.0, "Sevilla": 1710.0, "Celta Vigo": 1685.0, "Celta": 1685.0,
     "Osasuna": 1675.0, "Mallorca": 1680.0, "Valencia": 1690.0, "Rayo Vallecano": 1680.0,
     "Las Palmas": 1650.0, "Getafe": 1660.0, "Alaves": 1660.0, "Leganes": 1635.0,
-    "Espanyol": 1655.0, "Valladolid": 1625.0, "Manchester City": 2020.0, "Arsenal": 1985.0,
-    "Liverpool": 1970.0, "Chelsea": 1835.0, "Tottenham": 1815.0, "Newcastle": 1815.0,
-    "Aston Villa": 1835.0, "Manchester United": 1785.0, "Brighton": 1775.0, "West Ham": 1725.0,
-    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0, "RB Leipzig": 1875.0,
-    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0, "Milan": 1865.0,
-    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0
+    "Espanyol": 1655.0, "Valladolid": 1625.0,
+    # 英超
+    "Manchester City": 2020.0, "Arsenal": 1985.0, "Liverpool": 1970.0, "Chelsea": 1835.0,
+    "Tottenham": 1815.0, "Newcastle": 1815.0, "Aston Villa": 1835.0, "Manchester United": 1785.0,
+    "Brighton": 1775.0, "West Ham": 1725.0, "Fulham": 1715.0, "Bournemouth": 1705.0,
+    "Brentford": 1705.0, "Crystal Palace": 1715.0, "Wolves": 1685.0, "Everton": 1690.0,
+    "Nottingham Forest": 1685.0, "Leicester": 1675.0, "Southampton": 1635.0, "Ipswich": 1615.0,
+    # 德甲
+    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0,
+    "RB Leipzig": 1875.0, "Stuttgart": 1835.0, "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0,
+    "Wolfsburg": 1725.0, "Mainz": 1705.0, "Augsburg": 1705.0, "Werder Bremen": 1715.0,
+    # 義甲
+    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0,
+    "Milan": 1865.0, "AC Milan": 1865.0, "Roma": 1805.0, "Lazio": 1805.0, "Napoli": 1825.0,
+    "Bologna": 1815.0, "Fiorentina": 1775.0, "Torino": 1755.0,
+    # 法甲
+    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0,
+    "Lyon": 1775.0, "Nice": 1775.0, "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0
 }
 
 SOCCER_LEAGUES = {
@@ -496,7 +535,7 @@ class AutomatedMLBQuantSystem:
             
             umpire = row["umpire"]
             ump_factor = self.umpire_factors.get(umpire, 1.00)
-            umpire_display = f"{umpire}<br><span style='color:#e11d48; font-size:10px;'>(係數 {ump_factor:.2f})</span>"
+            umpire_display = f"{umpire}<br><span style='color:#e91e63; font-size:10px;'>(係數 {ump_factor:.2f})</span>"
             
             target_xwOBA_home = home_data["xwOBA_vs_L"] if away_data["hand"] == "LHP" else home_data["xwOBA_vs_R"]
             target_xwOBA_away = away_data["xwOBA_vs_L"] if home_data["hand"] == "LHP" else away_data["xwOBA_vs_R"]
@@ -588,7 +627,6 @@ class AutomatedMLBQuantSystem:
             bp_text_away = f"<span style='font-size:10.5px; color: #0f172a;'>{away_data['fatigue_desc']}</span>"
             bp_text_home = f"<span style='font-size:10.5px; color: #0f172a;'>{home_data['fatigue_desc']}</span>"
 
-            # 嚴格單行格式，絕不觸發 Markdown 縮排錯誤
             row_html = f'<tr><td style="padding: 8px 6px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{away_cn} @ {home_cn}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; font-size: 11.5px; text-align: center; color: #0f172a; white-space: nowrap;">{sp_text_away}<br>vs<br>{sp_text_home}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; white-space: nowrap;">{bp_text_away}<br>{bp_text_home}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-size: 11px; color: #0f172a; white-space: nowrap;">{umpire_display}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-size: 11px; color: #0284c7; white-space: nowrap;">{weather_desc}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; color: #e11d48; font-weight: bold; font-size: 12.5px; white-space: nowrap;">{lambda_away:.2f} : {lambda_home:.2f}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{actual_score_str}</td><td style="{ml_style}; font-size: 11.5px; white-space: nowrap;">{ml_text}</td><td style="{spread_style}; font-size: 11px; white-space: nowrap;">{spread_pick}</td><td style="{ou_style}; font-size: 11.5px; white-space: nowrap;">{ou_text}</td></tr>'
             rows_html.append(row_html)
             
@@ -605,59 +643,76 @@ def login_view():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.title("🔒 雙運動 VIP 量化系統")
-        st.caption("請點擊管理員發放之專屬 VIP 連結進入，或輸入管理員萬能通行碼。")
+        st.caption("請輸入 7 天 VIP 通行碼 或 管理員密碼：")
+        
         if auth_msg:
             st.error(auth_msg)
             
-        passcode = st.text_input("管理員通行碼", type="password", placeholder="輸入通行碼")
+        passcode = st.text_input("通行碼", type="password", placeholder="例如: TEST1_A04E 或 ADMIN999")
+        
         if st.button("確認進入", use_container_width=True, type="primary"):
-            clean = passcode.strip().upper()
-            if clean == MASTER_PASSCODE:
-                st.session_state["authenticated"] = True
-                st.session_state["is_admin"] = True
-                st.session_state["user_name"] = "管理員"
-                st.query_params["vip"] = MASTER_PASSCODE
+            ok, msg = try_authenticate(passcode)
+            if ok:
+                st.success(msg)
                 st.rerun()
             else:
-                st.error("通行碼錯誤！一般會員請直接點擊管理員發放的專屬連結。")
+                st.error(msg)
 
 def dashboard_view():
-    # 1. 管理員控制台 (VIP 專屬連結生成與解綁)
+    # 1. 管理員專屬控制台 (極簡代碼生成器與清單管理)
     if st.session_state.get("is_admin", False):
-        with st.expander("🛠️ **管理員控制台 (一機一碼會員管理)**", expanded=False):
-            st.markdown("##### 📌 一鍵生成 VIP 7 天防轉傳專屬連結")
+        with st.expander("🛠️ **管理員控制台 (VIP 代碼生成與管理)**", expanded=True):
+            st.markdown("##### 📌 一鍵生成 VIP 7 天防轉傳專屬代碼")
             col_in, col_gen = st.columns([3, 1])
             with col_in:
-                new_user = st.text_input("輸入會員暱稱 / LINE 代號", placeholder="例如: VIP888 或 小明", label_visibility="collapsed")
+                new_user = st.text_input("輸入會員暱稱 / LINE 代號", placeholder="例如: TEST1、小明 或 VIP888", label_visibility="collapsed")
             with col_gen:
-                if st.button("⚡ 生成專屬連結", use_container_width=True, type="primary"):
+                if st.button("⚡ 生成專屬通行碼", use_container_width=True, type="primary"):
                     if new_user:
                         token = generate_vip_token(new_user)
                         expire_str = (date.today() + timedelta(days=7)).strftime("%Y-%m-%d")
                         base_url = "https://soccer-quant-vip.streamlit.app"
+                        full_url = f"{base_url}/?vip={token}"
+                        
+                        if token not in registry:
+                            registry[token] = {
+                                "user_name": new_user.strip().upper(),
+                                "issue_date": date.today().strftime("%Y-%m-%d"),
+                                "dev_id": "",
+                                "bound_at": "尚未綁定 (發放中)"
+                            }
+                        
                         st.success(f"✅ 生成成功！有效期至 **{expire_str} 23:59**")
-                        st.code(f"{base_url}/?vip={token}", language="text")
+                        st.markdown(f"🔑 **會員通行密碼**： `{token}` （複製這組發給會員即可手動輸入）")
+                        st.markdown(f"🔗 **一鍵免密登入連結**：")
+                        st.code(full_url, language="text")
                     else:
                         st.warning("請先輸入會員暱稱！")
             
             st.markdown("---")
-            st.markdown("##### 📱 已綁定裝置管理")
+            st.markdown("##### 📱 已發放 / 已綁定 VIP 會員清單總覽")
             if not registry:
-                st.caption("目前尚無會員綁定裝置。")
+                st.caption("目前尚無發放或綁定的會員代碼。")
             else:
                 for tok, info in list(registry.items()):
                     cu, cd, cb = st.columns([2, 3, 1])
-                    with cu: st.write(f"👤 **{info['user_name']}**")
-                    with cd: st.caption(f"綁定: {info['bound_at']} | 裝置: `{info['dev_id']}`")
+                    with cu:
+                        st.write(f"👤 **{info['user_name']}**")
+                        st.caption(f"通行碼: `{tok}`")
+                    with cd:
+                        bind_status = "🟢已綁定手機" if info.get("dev_id") else "🟡未綁定 (首次點開將自動鎖定)"
+                        st.caption(f"發放日: {info['issue_date']} | 狀態: {bind_status}")
                     with cb:
-                        if st.button("🔓 解綁", key=f"unbind_{tok}", use_container_width=True):
+                        if st.button("🔓 一鍵解綁", key=f"unbind_{tok}", use_container_width=True):
                             del registry[tok]
                             st.success(f"已解綁 {info['user_name']}")
                             st.rerun()
 
+    # 2. 一般會員頂部歡迎條
     elif st.session_state.get("user_name"):
         rem = st.session_state.get("days_left", 7)
-        st.info(f"✨ 歡迎 VIP 會員 **{st.session_state['user_name']}** ｜ 專屬授權已綁定本機 ｜ 有效期剩餘： **{rem} 天**")
+        curr_tok = st.session_state.get("current_token", "")
+        st.info(f"✨ 歡迎 VIP 會員 **{st.session_state['user_name']}** ｜ 您的通行碼： `{curr_tok}` ｜ 有效期剩餘： **{rem} 天**")
 
     # 頂部導航
     col_t, col_l = st.columns([4, 1])
@@ -668,8 +723,8 @@ def dashboard_view():
             st.session_state["authenticated"] = False
             st.session_state["is_admin"] = False
             st.session_state["user_name"] = ""
+            st.session_state["current_token"] = ""
             if "vip" in st.query_params: del st.query_params["vip"]
-            if "dev" in st.query_params: del st.query_params["dev"]
             st.rerun()
 
     # ================= 畫面中央：運動項目切換區 =================
