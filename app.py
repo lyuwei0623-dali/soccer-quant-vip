@@ -103,30 +103,17 @@ if url_vip:
 
 # ================= 模組一：歐洲足球量化引擎 =================
 BASE_SOCCER_ELO = {
-    # 西甲
     "Real Madrid": 2010.0, "Barcelona": 1935.0, "Atletico Madrid": 1865.0, "Girona": 1785.0,
     "Athletic Club": 1805.0, "Athletic": 1805.0, "Real Sociedad": 1775.0, "Villarreal": 1775.0,
     "Real Betis": 1745.0, "Sevilla": 1710.0, "Celta Vigo": 1685.0, "Celta": 1685.0,
     "Osasuna": 1675.0, "Mallorca": 1680.0, "Valencia": 1690.0, "Rayo Vallecano": 1680.0,
     "Las Palmas": 1650.0, "Getafe": 1660.0, "Alaves": 1660.0, "Leganes": 1635.0,
-    "Espanyol": 1655.0, "Valladolid": 1625.0,
-    # 英超
-    "Manchester City": 2020.0, "Arsenal": 1985.0, "Liverpool": 1970.0, "Chelsea": 1835.0,
-    "Tottenham": 1815.0, "Newcastle": 1815.0, "Aston Villa": 1835.0, "Manchester United": 1785.0,
-    "Brighton": 1775.0, "West Ham": 1725.0, "Fulham": 1715.0, "Bournemouth": 1705.0,
-    "Brentford": 1705.0, "Crystal Palace": 1715.0, "Wolves": 1685.0, "Everton": 1690.0,
-    "Nottingham Forest": 1685.0, "Leicester": 1675.0, "Southampton": 1635.0, "Ipswich": 1615.0,
-    # 德甲
-    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0,
-    "RB Leipzig": 1875.0, "Stuttgart": 1835.0, "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0,
-    "Wolfsburg": 1725.0, "Mainz": 1705.0, "Augsburg": 1705.0, "Werder Bremen": 1715.0,
-    # 義甲
-    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0,
-    "Milan": 1865.0, "AC Milan": 1865.0, "Roma": 1805.0, "Lazio": 1805.0, "Napoli": 1825.0,
-    "Bologna": 1815.0, "Fiorentina": 1775.0, "Torino": 1755.0,
-    # 法甲
-    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0,
-    "Lyon": 1775.0, "Nice": 1775.0, "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0
+    "Espanyol": 1655.0, "Valladolid": 1625.0, "Manchester City": 2020.0, "Arsenal": 1985.0,
+    "Liverpool": 1970.0, "Chelsea": 1835.0, "Tottenham": 1815.0, "Newcastle": 1815.0,
+    "Aston Villa": 1835.0, "Manchester United": 1785.0, "Brighton": 1775.0, "West Ham": 1725.0,
+    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0, "RB Leipzig": 1875.0,
+    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0, "Milan": 1865.0,
+    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0
 }
 
 SOCCER_LEAGUES = {
@@ -256,41 +243,9 @@ def generate_soccer_report_cached(date_str: str):
             p_ou = f"大 2.5 ({ov_p*100:.1f}%)" if ov_p >= 0.5 else f"小 2.5 ({(1-ov_p)*100:.1f}%)"
             p_btts = f"是 ({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否 ({(1-btts_p)*100:.1f}%)"
             
-            rows.append(f'''
-                <tr>
-                    <td style="padding: 8px 6px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{h_cn} vs {a_cn}</td>
-                    <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-size: 11px; color: #334155; white-space: nowrap;">{int(h_elo)} vs {int(a_elo)}</td>
-                    <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; color: #e11d48; font-weight: bold; font-size: 12px; white-space: nowrap;">{lh:.2f}:{la:.2f}</td>
-                    <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{m["score"]}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: 600; font-size: 11.5px; color: #0f172a; white-space: nowrap;">{p_1x2}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: 600; font-size: 11px; color: #0f172a; white-space: nowrap;">{spread_p}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: 600; font-size: 11.5px; color: #0f172a; white-space: nowrap;">{p_ou}</td>
-                    <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-size: 11px; color: #334155; white-space: nowrap;">{p_btts}</td>
-                </tr>
-            ''')
+            rows.append(f'<tr><td style="padding: 8px 6px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{h_cn} vs {a_cn}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-size: 11px; color: #334155; white-space: nowrap;">{int(h_elo)} vs {int(a_elo)}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; color: #e11d48; font-weight: bold; font-size: 12px; white-space: nowrap;">{lh:.2f}:{la:.2f}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{m["score"]}</td><td style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: 600; font-size: 11.5px; color: #0f172a; white-space: nowrap;">{p_1x2}</td><td style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: 600; font-size: 11px; color: #0f172a; white-space: nowrap;">{spread_p}</td><td style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: 600; font-size: 11.5px; color: #0f172a; white-space: nowrap;">{p_ou}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-size: 11px; color: #334155; white-space: nowrap;">{p_btts}</td></tr>')
             
-        t_block = f'''
-        <div style="margin-bottom: 22px; width: 100%; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
-            <div style="background: linear-gradient(90deg, #0f172a, #334155); color: #ffffff; padding: 8px 12px; border-radius: 6px 6px 0 0; font-size: 13px; font-weight: bold;">{l_name}</div>
-            <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;">
-                <table style="width: 100%; min-width: 780px; border-collapse: collapse; font-size: 12px; background-color: #ffffff;">
-                    <thead>
-                        <tr style="background-color: #f1f5f9; text-align: center; color: #0f172a; font-weight: bold;">
-                            <th style="padding: 8px 6px; border: 1px solid #cbd5e1; color: #0f172a;">對戰組合</th>
-                            <th style="padding: 8px 3px; border: 1px solid #cbd5e1; color: #0f172a;">ClubElo</th>
-                            <th style="padding: 8px 3px; border: 1px solid #cbd5e1; color: #0f172a;">預估 xG</th>
-                            <th style="padding: 8px 3px; border: 1px solid #cbd5e1; color: #0f172a;">真實比分</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; color: #0f172a;">獨贏推薦</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; color: #0f172a;">讓球推薦</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; color: #0f172a;">大小 (2.5)</th>
-                            <th style="padding: 8px 3px; border: 1px solid #cbd5e1; color: #0f172a;">雙進</th>
-                        </tr>
-                    </thead>
-                    <tbody>{"".join(rows)}</tbody>
-                </table>
-            </div>
-        </div>
-        '''
+        t_block = f'<div style="margin-bottom: 22px; width: 100%; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"><div style="background: linear-gradient(90deg, #0f172a, #334155); color: #ffffff; padding: 8px 12px; border-radius: 6px 6px 0 0; font-size: 13px; font-weight: bold;">{l_name}</div><div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;"><table style="width: 100%; min-width: 780px; border-collapse: collapse; font-size: 12px; background-color: #ffffff;"><thead><tr style="background-color: #f1f5f9; text-align: center; color: #0f172a; font-weight: bold;"><th style="padding: 8px 6px; border: 1px solid #cbd5e1; color: #0f172a;">對戰組合</th><th style="padding: 8px 3px; border: 1px solid #cbd5e1; color: #0f172a;">ClubElo</th><th style="padding: 8px 3px; border: 1px solid #cbd5e1; color: #0f172a;">預估 xG</th><th style="padding: 8px 3px; border: 1px solid #cbd5e1; color: #0f172a;">真實比分</th><th style="padding: 8px 4px; border: 1px solid #cbd5e1; color: #0f172a;">獨贏推薦</th><th style="padding: 8px 4px; border: 1px solid #cbd5e1; color: #0f172a;">讓球推薦</th><th style="padding: 8px 4px; border: 1px solid #cbd5e1; color: #0f172a;">大小 (2.5)</th><th style="padding: 8px 3px; border: 1px solid #cbd5e1; color: #0f172a;">雙進</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div></div>'
         html_blocks.append(t_block)
     return tot, len(elo_db), "".join(html_blocks)
 
@@ -633,47 +588,11 @@ class AutomatedMLBQuantSystem:
             bp_text_away = f"<span style='font-size:10.5px; color: #0f172a;'>{away_data['fatigue_desc']}</span>"
             bp_text_home = f"<span style='font-size:10.5px; color: #0f172a;'>{home_data['fatigue_desc']}</span>"
 
-            rows_html.append(f"""
-                <tr>
-                    <td style="padding: 8px 6px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{away_cn} @ {home_cn}</td>
-                    <td style="padding: 6px 3px; border: 1px solid #cbd5e1; font-size: 11.5px; text-align: center; color: #0f172a; white-space: nowrap;">{sp_text_away}<br>vs<br>{sp_text_home}</td>
-                    <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; white-space: nowrap;">{bp_text_away}<br>{bp_text_home}</td>
-                    <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-size: 11px; color: #0f172a; white-space: nowrap;">{umpire_display}</td>
-                    <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-size: 11px; color: #0284c7; white-space: nowrap;">{weather_desc}</td>
-                    <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; color: #e11d48; font-weight: bold; font-size: 12.5px; white-space: nowrap;">{lambda_away:.2f} : {lambda_home:.2f}</td>
-                    <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{actual_score_str}</td>
-                    <td style="{ml_style}; font-size: 11.5px; white-space: nowrap;">{ml_text}</td>
-                    <td style="{spread_style}; font-size: 11px; white-space: nowrap;">{spread_pick}</td>
-                    <td style="{ou_style}; font-size: 11.5px; white-space: nowrap;">{ou_text}</td>
-                </tr>
-            """)
+            # 嚴格單行格式，絕不觸發 Markdown 縮排錯誤
+            row_html = f'<tr><td style="padding: 8px 6px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{away_cn} @ {home_cn}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; font-size: 11.5px; text-align: center; color: #0f172a; white-space: nowrap;">{sp_text_away}<br>vs<br>{sp_text_home}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; white-space: nowrap;">{bp_text_away}<br>{bp_text_home}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-size: 11px; color: #0f172a; white-space: nowrap;">{umpire_display}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-size: 11px; color: #0284c7; white-space: nowrap;">{weather_desc}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; color: #e11d48; font-weight: bold; font-size: 12.5px; white-space: nowrap;">{lambda_away:.2f} : {lambda_home:.2f}</td><td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{actual_score_str}</td><td style="{ml_style}; font-size: 11.5px; white-space: nowrap;">{ml_text}</td><td style="{spread_style}; font-size: 11px; white-space: nowrap;">{spread_pick}</td><td style="{ou_style}; font-size: 11.5px; white-space: nowrap;">{ou_text}</td></tr>'
+            rows_html.append(row_html)
             
-        table_html = f"""
-        <div style="margin-bottom: 20px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
-            <div style="background: linear-gradient(90deg, #1e3a8a, #0369a1); color: #ffffff; padding: 8px 12px; border-radius: 6px 6px 0 0; font-size: 13px; font-weight: bold;">⚾ 美國職棒大聯盟 (Major League Baseball)</div>
-            <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;">
-                <table style="width: 100%; min-width: 900px; border-collapse: collapse; font-size: 12px; background-color: #ffffff;">
-                    <thead>
-                        <tr style="background-color: #f1f5f9; text-align: center; color: #0f172a; font-weight: bold;">
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">對戰組合</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">先發 & 慣用手</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">昨日牛棚狀態</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">本壘板主審</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">天氣與風向</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">預估分(客:主)</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">真實比分</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">獨贏推薦</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">讓分推薦 (±1)</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">大小推薦 ({market_line})</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {''.join(rows_html)}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        """
+        table_html = f'<div style="margin-bottom: 20px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"><div style="background: linear-gradient(90deg, #1e3a8a, #0369a1); color: #ffffff; padding: 8px 12px; border-radius: 6px 6px 0 0; font-size: 13px; font-weight: bold;">⚾ 美國職棒大聯盟 (Major League Baseball)</div><div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;"><table style="width: 100%; min-width: 900px; border-collapse: collapse; font-size: 12px; background-color: #ffffff;"><thead><tr style="background-color: #f1f5f9; text-align: center; color: #0f172a; font-weight: bold;"><th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">對戰組合</th><th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">先發 & 慣用手</th><th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">昨日牛棚狀態</th><th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">本壘板主審</th><th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">天氣與風向</th><th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">預估分(客:主)</th><th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">真實比分</th><th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">獨贏推薦</th><th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">讓分推薦 (±1)</th><th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a;">大小推薦 ({market_line})</th></tr></thead><tbody>{"".join(rows_html)}</tbody></table></div></div>'
         return len(df_games), table_html
 
 @st.cache_data(ttl=900, show_spinner=False)
