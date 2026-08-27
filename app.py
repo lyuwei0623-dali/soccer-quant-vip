@@ -5,15 +5,23 @@ import requests
 import hashlib
 import io
 import time
+import os
+import base64
 from datetime import datetime, date, timedelta
 
 # 1. 頁面設定（支援手機響應式寬度）
 st.set_page_config(
-    page_title="VIP 雙運動量化定價系統",
+    page_title="雙運動量化定價系統 (官方VIP)",
     page_icon="🏆",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# ================= 品牌防偽客製化設定 =================
+BRAND_NAME = "維大力"              # 你的專屬品牌名稱
+BRAND_TAGLINE = "官方唯一正版認證 ｜ 賽事數據量化分析" # 專屬標語
+CUSTOM_LOGO_URL = ""               # 若有圖片網址可填入，留空則自動讀取 GitHub 上的 logo.jpg 或 logo.png
+WATERMARK_TEXT = "維大力 官方正版認證" # 背景防偽浮水印文字
 
 # ================= 密碼與金鑰設定 =================
 MASTER_PASSCODE = "ADMIN999"      # 管理員萬能通行碼
@@ -67,6 +75,72 @@ def parse_and_validate_token(token: str):
             
     return False, None, None, 0
 
+# ================= 全局防偽浮水印與專屬 CSS =================
+def apply_branding_css():
+    st.markdown(f"""
+    <style>
+    /* 全局防偽半透明浮水印背景 */
+    .stApp::before {{
+        content: "{WATERMARK_TEXT}";
+        position: fixed;
+        top: 40%;
+        left: 15%;
+        width: 70%;
+        text-align: center;
+        transform: rotate(-25deg);
+        font-size: 38px;
+        font-weight: 900;
+        color: rgba(225, 29, 72, 0.04);
+        pointer-events: none;
+        z-index: 0;
+        font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+        letter-spacing: 6px;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+def render_brand_header():
+    """渲染頂部官方正版識別橫幅 (支援 jpg/png/webp 自動 Base64 解析)"""
+    logo_html = ""
+    if CUSTOM_LOGO_URL:
+        logo_html = f'<img src="{CUSTOM_LOGO_URL}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #f59e0b; margin-right: 12px; object-fit: cover;">'
+    else:
+        # 自動搜尋 logo.jpg, logo.png, logo.jpeg, logo.jgp
+        for ext in ["jpg", "jpeg", "png", "webp", "jgp"]:
+            filename = f"logo.{ext}"
+            if os.path.exists(filename):
+                try:
+                    with open(filename, "rb") as img_f:
+                        encoded = base64.b64encode(img_f.read()).decode()
+                    mime_type = "jpeg" if ext in ["jpg", "jpeg", "jgp"] else ext
+                    logo_html = f'<img src="data:image/{mime_type};base64,{encoded}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #f59e0b; margin-right: 12px; object-fit: cover;">'
+                    break
+                except Exception:
+                    pass
+        
+        # 若未上傳圖片，預設顯示金色盾牌標章
+        if not logo_html:
+            logo_html = '<div style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; margin-right: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);">🛡️</div>'
+
+    header_html = f"""
+    <div style="background: linear-gradient(90deg, #0f172a, #1e293b); border: 1px solid #334155; padding: 12px 16px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+        <div style="display: flex; align-items: center;">
+            {logo_html}
+            <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #f8fafc; font-size: 16px; font-weight: 800; letter-spacing: 0.5px;">{BRAND_NAME} 體育量化定價系統</span>
+                    <span style="background: linear-gradient(90deg, #f59e0b, #d97706); color: #000; font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">官方正版</span>
+                </div>
+                <div style="color: #94a3b8; font-size: 11px; margin-top: 2px;">{BRAND_TAGLINE}</div>
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <span style="color: #38bdf8; font-size: 11px; font-weight: 600;">● 核心在線</span>
+        </div>
+    </div>
+    """
+    st.markdown(header_html, unsafe_allow_html=True)
+
 # ================= 一機一碼核心驗證邏輯 =================
 registry = get_device_registry()
 url_vip = st.query_params.get("vip", "").strip().upper()
@@ -95,7 +169,7 @@ def try_authenticate(input_token: str):
         
     is_valid, u_name, issue_dt, rem_days = parse_and_validate_token(clean)
     if not is_valid:
-        return False, "⛔ 通行碼無效或已過期，請向管理員領取最新通行碼！"
+        return False, "⛔ 通行碼無效或已過期，請向官方管理員領取最新通行碼！"
         
     if clean not in registry:
         registry[clean] = {
@@ -107,7 +181,7 @@ def try_authenticate(input_token: str):
     else:
         bound_dev = registry[clean].get("dev_id", "")
         if bound_dev and bound_dev != dev_fp and bound_dev != "device_default":
-            return False, "⛔ 訪問被拒：此 VIP 代碼已綁定其他手機，嚴禁轉傳！若更換手機請聯繫管理員解綁。"
+            return False, "⛔ 訪問被拒：此 VIP 代碼已綁定其他手機，嚴禁轉傳！若更換手機請聯繫官方管理員解綁。"
             
     st.session_state["authenticated"] = True
     st.session_state["is_admin"] = False
@@ -124,17 +198,30 @@ if not st.session_state["authenticated"] and url_vip:
 
 # ================= 模組一：歐洲足球量化引擎 =================
 BASE_SOCCER_ELO = {
+    # 西甲
     "Real Madrid": 2010.0, "Barcelona": 1935.0, "Atletico Madrid": 1865.0, "Girona": 1785.0,
     "Athletic Club": 1805.0, "Athletic": 1805.0, "Real Sociedad": 1775.0, "Villarreal": 1775.0,
     "Real Betis": 1745.0, "Sevilla": 1710.0, "Celta Vigo": 1685.0, "Celta": 1685.0,
     "Osasuna": 1675.0, "Mallorca": 1680.0, "Valencia": 1690.0, "Rayo Vallecano": 1680.0,
     "Las Palmas": 1650.0, "Getafe": 1660.0, "Alaves": 1660.0, "Leganes": 1635.0,
-    "Espanyol": 1655.0, "Valladolid": 1625.0, "Manchester City": 2020.0, "Arsenal": 1985.0,
-    "Liverpool": 1970.0, "Chelsea": 1835.0, "Tottenham": 1815.0, "Newcastle": 1815.0,
-    "Aston Villa": 1835.0, "Manchester United": 1785.0, "Brighton": 1775.0, "West Ham": 1725.0,
-    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0, "RB Leipzig": 1875.0,
-    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0, "Milan": 1865.0,
-    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0
+    "Espanyol": 1655.0, "Valladolid": 1625.0,
+    # 英超
+    "Manchester City": 2020.0, "Arsenal": 1985.0, "Liverpool": 1970.0, "Chelsea": 1835.0,
+    "Tottenham": 1815.0, "Newcastle": 1815.0, "Aston Villa": 1835.0, "Manchester United": 1785.0,
+    "Brighton": 1775.0, "West Ham": 1725.0, "Fulham": 1715.0, "Bournemouth": 1705.0,
+    "Brentford": 1705.0, "Crystal Palace": 1715.0, "Wolves": 1685.0, "Everton": 1690.0,
+    "Nottingham Forest": 1685.0, "Leicester": 1675.0, "Southampton": 1635.0, "Ipswich": 1615.0,
+    # 德甲
+    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0,
+    "RB Leipzig": 1875.0, "Stuttgart": 1835.0, "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0,
+    "Wolfsburg": 1725.0, "Mainz": 1705.0, "Augsburg": 1705.0, "Werder Bremen": 1715.0,
+    # 義甲
+    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0,
+    "Milan": 1865.0, "AC Milan": 1865.0, "Roma": 1805.0, "Lazio": 1805.0, "Napoli": 1825.0,
+    "Bologna": 1815.0, "Fiorentina": 1775.0, "Torino": 1755.0,
+    # 法甲
+    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0,
+    "Lyon": 1775.0, "Nice": 1775.0, "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0
 }
 
 SOCCER_LEAGUES = {
@@ -622,10 +709,11 @@ def generate_mlb_report_cached(date_str: str, market_line: float = 8.5):
 
 # ================= 介面視圖 =================
 def login_view():
+    apply_branding_css()
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.title("🔒 雙運動 VIP 量化系統")
-        st.caption("請輸入會員通行碼以解鎖賽事分析：")
+        render_brand_header()
+        st.caption("請輸入會員通行碼以解鎖今日數據分析：")
         
         if auth_msg:
             st.error(auth_msg)
@@ -641,9 +729,12 @@ def login_view():
                 st.error(msg)
 
 def dashboard_view():
+    apply_branding_css()
+    render_brand_header()
+
     # 1. 管理員專屬控制台
     if st.session_state.get("is_admin", False):
-        with st.expander("🛠️ **管理員控制台 (VIP 代碼生成與管理)**", expanded=True):
+        with st.expander("🛠️ **管理員控制台 (VIP 代碼生成與管理)**", expanded=False):
             st.markdown("##### 📌 一鍵生成 VIP 7 天防轉傳專屬代碼")
             col_in, col_gen = st.columns([3, 1])
             with col_in:
