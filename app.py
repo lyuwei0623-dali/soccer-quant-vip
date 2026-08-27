@@ -25,10 +25,17 @@ def get_today_passcode(date_str: str = None) -> str:
     raw_hash = hashlib.sha256(f"{date_str}_{SECRET_SALT}".encode()).hexdigest()
     return raw_hash[:6].upper()
 
+# 2. 手機捷徑防斷線：自動檢查 URL 參數中的通行碼
+today_code = get_today_passcode()
+url_passcode = st.query_params.get("key", "").upper()
+
 if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-if "is_admin" not in st.session_state:
-    st.session_state["is_admin"] = False
+    if url_passcode in [MASTER_PASSCODE, today_code]:
+        st.session_state["authenticated"] = True
+        st.session_state["is_admin"] = (url_passcode == MASTER_PASSCODE)
+    else:
+        st.session_state["authenticated"] = False
+        st.session_state["is_admin"] = False
 
 # ================= 足球自動化量化系統 V3.0 =================
 class AutomatedSoccerQuantSystemV3:
@@ -123,7 +130,6 @@ class AutomatedSoccerQuantSystemV3:
         if team_name in self.elo_db:
             return self.elo_db[team_name]
         
-        # 特殊隊名別名映射
         aliases = {
             "Athletic Club": "Athletic", "Atlético Madrid": "Atleti", "Atletico Madrid": "Atleti",
             "Celta Vigo": "Celta", "Celta de Vigo": "Celta", "Real Betis": "Betis",
@@ -226,7 +232,7 @@ class AutomatedSoccerQuantSystemV3:
         pick_ou = f"大 {market_total} ({over_prob*100:.1f}%)" if over_prob >= 0.5 else f"小 {market_total} ({under_prob*100:.1f}%)"
         pick_btts = f"是 ({btts_prob*100:.1f}%)" if btts_prob >= 0.5 else f"否 ({(1-btts_prob)*100:.1f}%)"
         
-        # 回測與文字樣式設定（強制高對比深色文字）
+        # 回測樣式
         ml_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a; font-weight: 600;"
         spread_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a; font-weight: 600;"
         ou_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a; font-weight: 600;"
@@ -268,7 +274,6 @@ class AutomatedSoccerQuantSystemV3:
             total_matches_count += len(matches)
             rows = "".join([self.simulate_match(m["home_team"], m["away_team"], m["actual_score"], m["league_slug"]) for m in matches])
             
-            # 使用無縮排 HTML 結構，防止 Streamlit 解析器誤判
             table_section = (
                 f'<div style="margin-bottom: 22px; width: 100%; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">'
                 f'<div style="background: linear-gradient(90deg, #0f172a, #334155); color: #ffffff; padding: 8px 12px; border-radius: 6px 6px 0 0; font-size: 13px; font-weight: bold;">{league_name}</div>'
@@ -296,7 +301,6 @@ def login_view():
         st.title("🔒 會員專屬量化系統")
         st.caption("請輸入會員專屬通行碼以解鎖今日數據分析。")
         
-        today_code = get_today_passcode()
         passcode = st.text_input("會員通行碼", type="password", placeholder="請輸入 6 位數每日動態通行碼")
         
         if st.button("確認進入", use_container_width=True, type="primary"):
@@ -304,7 +308,8 @@ def login_view():
             if input_clean == MASTER_PASSCODE or input_clean == today_code:
                 st.session_state["authenticated"] = True
                 st.session_state["is_admin"] = (input_clean == MASTER_PASSCODE)
-                st.success("驗證成功，正在載入賽事模型...")
+                # 將密碼寫入 URL，手機桌面捷徑重整時可自動保持登入
+                st.query_params["key"] = input_clean
                 st.rerun()
             else:
                 st.error("通行碼無效或已過期，請每日向管理員領取最新密碼。")
@@ -321,6 +326,9 @@ def dashboard_view():
         if st.button("登出", use_container_width=True):
             st.session_state["authenticated"] = False
             st.session_state["is_admin"] = False
+            # 登出時主動刪除 URL 密碼參數
+            if "key" in st.query_params:
+                del st.query_params["key"]
             st.rerun()
 
     # 賽事日期選擇
@@ -338,6 +346,7 @@ def dashboard_view():
                 st.success(f"✅ 成功同步 {elo_count} 隊 ClubElo 戰力！抓取 {total_count} 場比賽，完成 10,000 次蒙地卡羅量化模擬！")
                 st.markdown(report_html, unsafe_allow_html=True)
 
+# ================= 流程路由控制 =================
 if not st.session_state["authenticated"]:
     login_view()
 else:
