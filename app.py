@@ -96,15 +96,6 @@ def apply_branding_css():
         font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
         letter-spacing: 6px;
     }}
-    .stat-card {{
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 12px;
-        text-align: center;
-        margin-bottom: 10px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -203,19 +194,32 @@ if not st.session_state["authenticated"] and url_vip:
     if not ok:
         auth_msg = msg
 
-# ================= 模組一：歐洲足球量化與走地引擎 =================
+# ================= 模組一：歐洲足球量化與走地資料庫 =================
 BASE_SOCCER_ELO = {
+    # 西甲
     "Real Madrid": 2010.0, "Barcelona": 1935.0, "Atletico Madrid": 1865.0, "Girona": 1785.0,
     "Athletic Club": 1805.0, "Athletic": 1805.0, "Real Sociedad": 1775.0, "Villarreal": 1775.0,
     "Real Betis": 1745.0, "Sevilla": 1710.0, "Celta Vigo": 1685.0, "Celta": 1685.0,
     "Osasuna": 1675.0, "Mallorca": 1680.0, "Valencia": 1690.0, "Rayo Vallecano": 1680.0,
     "Las Palmas": 1650.0, "Getafe": 1660.0, "Alaves": 1660.0, "Leganes": 1635.0,
-    "Espanyol": 1655.0, "Valladolid": 1625.0, "Manchester City": 2020.0, "Arsenal": 1985.0,
-    "Liverpool": 1970.0, "Chelsea": 1835.0, "Tottenham": 1815.0, "Newcastle": 1815.0,
-    "Aston Villa": 1835.0, "Manchester United": 1785.0, "Brighton": 1775.0, "West Ham": 1725.0,
-    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0, "RB Leipzig": 1875.0,
-    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0, "Milan": 1865.0,
-    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0
+    "Espanyol": 1655.0, "Valladolid": 1625.0,
+    # 英超
+    "Manchester City": 2020.0, "Arsenal": 1985.0, "Liverpool": 1970.0, "Chelsea": 1835.0,
+    "Tottenham": 1815.0, "Newcastle": 1815.0, "Aston Villa": 1835.0, "Manchester United": 1785.0,
+    "Brighton": 1775.0, "West Ham": 1725.0, "Fulham": 1715.0, "Bournemouth": 1705.0,
+    "Brentford": 1705.0, "Crystal Palace": 1715.0, "Wolves": 1685.0, "Everton": 1690.0,
+    "Nottingham Forest": 1685.0, "Leicester": 1675.0, "Southampton": 1635.0, "Ipswich": 1615.0,
+    # 德甲
+    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0,
+    "RB Leipzig": 1875.0, "Stuttgart": 1835.0, "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0,
+    "Wolfsburg": 1725.0, "Mainz": 1705.0, "Augsburg": 1705.0, "Werder Bremen": 1715.0,
+    # 義甲
+    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0,
+    "Milan": 1865.0, "AC Milan": 1865.0, "Roma": 1805.0, "Lazio": 1805.0, "Napoli": 1825.0,
+    "Bologna": 1815.0, "Fiorentina": 1775.0, "Torino": 1755.0,
+    # 法甲
+    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0,
+    "Lyon": 1775.0, "Nice": 1775.0, "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0
 }
 
 SOCCER_LEAGUES = {
@@ -233,22 +237,114 @@ SOCCER_GOALS = {
     "fra.1": {"home": 1.42, "away": 1.12}, "uefa.champions": {"home": 1.58, "away": 1.28}
 }
 
+# 繁體中文台灣慣用隊名映射字典
 SOCCER_CN = {
+    # 英超
     "Manchester City": "曼城", "Arsenal": "兵工廠", "Liverpool": "利物浦", "Chelsea": "切爾西",
     "Tottenham Hotspur": "熱刺", "Tottenham": "熱刺", "Manchester United": "曼聯", "Newcastle United": "紐卡索聯",
-    "Aston Villa": "阿斯頓維拉", "Brighton & Hove Albion": "布萊頓", "Brighton": "布萊頓", "West Ham United": "西漢姆聯",
-    "West Ham": "西漢姆聯", "Fulham": "富勒姆", "Wolverhampton Wanderers": "狼隊", "Wolves": "狼隊",
-    "Everton": "艾佛頓", "Brentford": "布倫特福德", "Crystal Palace": "水晶宮", "Bournemouth": "伯恩茅斯",
-    "Nottingham Forest": "諾丁漢森林", "Leicester City": "萊斯特城", "Ipswich Town": "伊普斯維奇", "Southampton": "南安普敦",
+    "Newcastle": "紐卡索聯", "Aston Villa": "阿斯頓維拉", "Brighton & Hove Albion": "布萊頓", "Brighton": "布萊頓",
+    "West Ham United": "西漢姆聯", "West Ham": "西漢姆聯", "Fulham": "富勒姆", "Wolverhampton Wanderers": "狼隊",
+    "Wolves": "狼隊", "Everton": "艾佛頓", "Brentford": "布倫特福德", "Crystal Palace": "水晶宮",
+    "Bournemouth": "伯恩茅斯", "Nottingham Forest": "諾丁漢森林", "Leicester City": "萊斯特城",
+    "Leicester": "萊斯特城", "Ipswich Town": "伊普斯維奇", "Ipswich": "伊普斯維奇", "Southampton": "南安普敦",
+    # 西甲
     "Real Madrid": "皇家馬德里", "Barcelona": "巴塞隆納", "Atlético Madrid": "馬德里競技", "Atletico Madrid": "馬德里競技",
-    "Girona": "赫羅納", "Athletic Club": "畢爾包競技", "Real Sociedad": "皇家社會", "Real Betis": "皇家貝提斯",
-    "Villarreal": "比利亞雷亞爾", "Sevilla": "塞維亞", "Valencia": "瓦倫西亞", "Osasuna": "奧薩蘇納",
-    "Celta Vigo": "塞爾塔", "Celta de Vigo": "塞爾塔", "Mallorca": "馬約卡", "Rayo Vallecano": "巴列卡諾",
-    "Las Palmas": "拉斯帕爾馬斯", "Getafe": "赫塔菲", "Alavés": "阿拉維斯", "Alaves": "阿拉維斯",
-    "Espanyol": "西班牙人", "Leganés": "萊加內斯", "Leganes": "萊加內斯", "Real Valladolid": "瓦拉多利德",
+    "Girona": "赫羅納", "Athletic Club": "畢爾包競技", "Athletic": "畢爾包競技", "Real Sociedad": "皇家社會",
+    "Real Betis": "皇家貝提斯", "Villarreal": "比利亞雷亞爾", "Sevilla": "塞維亞", "Valencia": "瓦倫西亞",
+    "Osasuna": "奧薩蘇納", "Celta Vigo": "塞爾塔", "Celta de Vigo": "塞爾塔", "Celta": "塞爾塔",
+    "Mallorca": "馬約卡", "Rayo Vallecano": "巴列卡諾", "Las Palmas": "拉斯帕爾馬斯", "Getafe": "赫塔菲",
+    "Alavés": "阿拉維斯", "Alaves": "阿拉維斯", "Espanyol": "西班牙人", "Leganés": "萊加內斯",
+    "Leganes": "萊加內斯", "Real Valladolid": "瓦拉多利德", "Valladolid": "瓦拉多利德",
+    # 德甲
     "Bayern Munich": "拜仁慕尼黑", "Bayer Leverkusen": "勒沃庫森", "Borussia Dortmund": "多特蒙德",
-    "RB Leipzig": "RB萊比錫", "Internazionale": "國際米蘭", "Inter Milan": "國際米蘭", "AC Milan": "AC米蘭",
-    "Juventus": "尤文圖斯", "Paris Saint-Germain": "巴黎聖日耳曼"
+    "RB Leipzig": "RB萊比錫", "Stuttgart": "斯圖加特", "Eintracht Frankfurt": "法蘭克福", "Freiburg": "弗萊堡",
+    "Wolfsburg": "狼堡", "Mainz": "梅因斯", "Augsburg": "奧格斯堡", "Werder Bremen": "雲達不萊梅",
+    # 義甲
+    "Inter": "國際米蘭", "Internazionale": "國際米蘭", "Inter Milan": "國際米蘭", "Atalanta": "亞特蘭大",
+    "Juventus": "尤文圖斯", "Milan": "AC米蘭", "AC Milan": "AC米蘭", "Roma": "羅馬", "Lazio": "拉齊奧",
+    "Napoli": "拿坡里", "Bologna": "波隆那", "Fiorentina": "佛倫提那", "Torino": "都靈",
+    # 法甲
+    "Paris Saint-Germain": "巴黎聖日耳曼", "Monaco": "摩納哥", "Lille": "里爾", "Marseille": "馬賽",
+    "Lyon": "里昂", "Nice": "尼斯", "Lens": "朗斯", "Brest": "布雷斯特", "Rennes": "雷恩"
+}
+
+# 走地專屬：依聯賽分類的台灣繁體選單字典
+SOCCER_INPLAY_DROPDOWN = {
+    # 英超
+    "【英超】兵工廠": "Arsenal",
+    "【英超】曼城": "Manchester City",
+    "【英超】利物浦": "Liverpool",
+    "【英超】切爾西": "Chelsea",
+    "【英超】熱刺": "Tottenham",
+    "【英超】曼聯": "Manchester United",
+    "【英超】阿斯頓維拉": "Aston Villa",
+    "【英超】紐卡索聯": "Newcastle",
+    "【英超】布萊頓": "Brighton",
+    "【英超】西漢姆聯": "West Ham",
+    "【英超】富勒姆": "Fulham",
+    "【英超】水晶宮": "Crystal Palace",
+    "【英超】伯恩茅斯": "Bournemouth",
+    "【英超】布倫特福德": "Brentford",
+    "【英超】艾佛頓": "Everton",
+    "【英超】狼隊": "Wolves",
+    "【英超】諾丁漢森林": "Nottingham Forest",
+    "【英超】萊斯特城": "Leicester",
+    "【英超】南安普敦": "Southampton",
+    "【英超】伊普斯維奇": "Ipswich",
+    # 西甲
+    "【西甲】皇家馬德里": "Real Madrid",
+    "【西甲】巴塞隆納": "Barcelona",
+    "【西甲】馬德里競技": "Atletico Madrid",
+    "【西甲】赫羅納": "Girona",
+    "【西甲】畢爾包競技": "Athletic Club",
+    "【西甲】皇家社會": "Real Sociedad",
+    "【西甲】比利亞雷亞爾": "Villarreal",
+    "【西甲】皇家貝提斯": "Real Betis",
+    "【西甲】塞維亞": "Sevilla",
+    "【西甲】瓦倫西亞": "Valencia",
+    "【西甲】奧薩蘇納": "Osasuna",
+    "【西甲】塞爾塔": "Celta Vigo",
+    "【西甲】馬約卡": "Mallorca",
+    "【西甲】巴列卡諾": "Rayo Vallecano",
+    "【西甲】阿拉維斯": "Alaves",
+    "【西甲】赫塔菲": "Getafe",
+    "【西甲】西班牙人": "Espanyol",
+    "【西甲】拉斯帕爾馬斯": "Las Palmas",
+    "【西甲】萊加內斯": "Leganes",
+    "【西甲】瓦拉多利德": "Valladolid",
+    # 德甲
+    "【德甲】拜仁慕尼黑": "Bayern Munich",
+    "【德甲】勒沃庫森": "Bayer Leverkusen",
+    "【德甲】多特蒙德": "Borussia Dortmund",
+    "【德甲】RB萊比錫": "RB Leipzig",
+    "【德甲】斯圖加特": "Stuttgart",
+    "【德甲】法蘭克福": "Eintracht Frankfurt",
+    "【德甲】弗萊堡": "Freiburg",
+    "【德甲】狼堡": "Wolfsburg",
+    "【德甲】梅因斯": "Mainz",
+    "【德甲】奧格斯堡": "Augsburg",
+    "【德甲】雲達不萊梅": "Werder Bremen",
+    # 義甲
+    "【義甲】國際米蘭": "Inter",
+    "【義甲】尤文圖斯": "Juventus",
+    "【義甲】AC米蘭": "Milan",
+    "【義甲】亞特蘭大": "Atalanta",
+    "【義甲】拿坡里": "Napoli",
+    "【義甲】羅馬": "Roma",
+    "【義甲】拉齊奧": "Lazio",
+    "【義甲】波隆那": "Bologna",
+    "【義甲】佛倫提那": "Fiorentina",
+    "【義甲】都靈": "Torino",
+    # 法甲
+    "【法甲】巴黎聖日耳曼": "Paris Saint-Germain",
+    "【法甲】摩納哥": "Monaco",
+    "【法甲】里爾": "Lille",
+    "【法甲】馬賽": "Marseille",
+    "【法甲】里昂": "Lyon",
+    "【法甲】尼斯": "Nice",
+    "【法甲】朗斯": "Lens",
+    "【法甲】布雷斯特": "Brest",
+    "【法甲】雷恩": "Rennes"
 }
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -492,7 +588,7 @@ class AutomatedMLBQuantSystem:
             "Chicago White Sox": {"xwOBA_vs_R": 0.288, "xwOBA_vs_L": 0.278, "bp_siera": 4.75, "team_avg_sp": 4.95}
         }
         
-        # FanGraphs 權威 RE24 得分期望矩陣 (Base-Out Run Expectancy Matrix)
+        # FanGraphs 權威 RE24 得分期望矩陣
         self.re24_matrix = {
             0: {"Empty": 0.48, "1B": 0.86, "2B": 1.10, "3B": 1.35, "12B": 1.44, "13B": 1.70, "23B": 1.96, "Loaded": 2.28},
             1: {"Empty": 0.25, "1B": 0.51, "2B": 0.67, "3B": 0.95, "12B": 0.93, "13B": 1.14, "23B": 1.38, "Loaded": 1.54},
@@ -771,18 +867,26 @@ def login_view():
                 st.error(msg)
 
 def render_soccer_inplay_calculator():
-    st.markdown("#### ⚡ 歐洲足球即時走地公允定價試算器")
-    st.caption("依據即時比賽時間衰減、落後追分強度與少打一人懲罰模型，秒出滾球公允賠率與進場訊號。")
+    st.markdown("#### ⚡ 歐洲頂級足球走地公允定價試算器")
+    st.caption("依據五大聯賽各隊即時時間衰減、落後追分強度與少打一人懲罰模型，秒出滾球公允賠率與進場訊號。")
     
+    dropdown_labels = list(SOCCER_INPLAY_DROPDOWN.keys())
+    
+    # 預設選取 西甲-皇家馬德里 vs 西甲-巴塞隆納
+    default_h_idx = dropdown_labels.index("【西甲】皇家馬德里") if "【西甲】皇家馬德里" in dropdown_labels else 0
+    default_a_idx = dropdown_labels.index("【西甲】巴塞隆納") if "【西甲】巴塞隆納" in dropdown_labels else 1
+
     col1, col2 = st.columns(2)
     with col1:
-        home_team = st.selectbox("選擇主隊 (Home Team)", list(BASE_SOCCER_ELO.keys()), index=0)
-        curr_home_score = st.number_input("主隊當前進球數", min_value=0, max_value=15, value=0)
-        home_red_cards = st.number_input("主隊紅牌數", min_value=0, max_value=3, value=0)
+        home_choice = st.selectbox("選擇主隊 (Home Team)", dropdown_labels, index=default_h_idx)
+        home_team = SOCCER_INPLAY_DROPDOWN[home_choice]
+        curr_home_score = st.number_input(f"{home_choice} 當前進球數", min_value=0, max_value=15, value=0)
+        home_red_cards = st.number_input(f"{home_choice} 紅牌數", min_value=0, max_value=3, value=0)
     with col2:
-        away_team = st.selectbox("選擇客隊 (Away Team)", list(BASE_SOCCER_ELO.keys()), index=1)
-        curr_away_score = st.number_input("客隊當前進球數", min_value=0, max_value=15, value=0)
-        away_red_cards = st.number_input("客隊紅牌數", min_value=0, max_value=3, value=0)
+        away_choice = st.selectbox("選擇客隊 (Away Team)", dropdown_labels, index=default_a_idx)
+        away_team = SOCCER_INPLAY_DROPDOWN[away_choice]
+        curr_away_score = st.number_input(f"{away_choice} 當前進球數", min_value=0, max_value=15, value=0)
+        away_red_cards = st.number_input(f"{away_choice} 紅牌數", min_value=0, max_value=3, value=0)
         
     c_time, c_line = st.columns(2)
     with c_time:
@@ -859,15 +963,23 @@ def render_mlb_inplay_calculator():
     st.caption("結合 FanGraphs 權威 RE24 出局數得分期望矩陣與後援投手負二項分佈，秒算半局得分率與全場勝率。")
     
     mlb_sys = AutomatedMLBQuantSystem(simulations=10000)
-    all_teams = list(mlb_sys.team_ratings.keys())
     
+    # 繁體中文美棒選單
+    mlb_dropdown_map = {f"【美棒】{v} ({k.split()[-1]})": k for k, v in mlb_sys.team_cn_names.items()}
+    mlb_labels = list(mlb_dropdown_map.keys())
+    
+    default_h_idx = next((i for i, l in enumerate(mlb_labels) if "道奇" in l), 0)
+    default_a_idx = next((i for i, l in enumerate(mlb_labels) if "洋基" in l), 1)
+
     col1, col2 = st.columns(2)
     with col1:
-        away_team = st.selectbox("客隊 (Away Team)", all_teams, index=0)
-        curr_away_runs = st.number_input("客隊當前得分", min_value=0, max_value=30, value=2)
+        away_choice = st.selectbox("客隊 (Away Team)", mlb_labels, index=default_a_idx)
+        away_team = mlb_dropdown_map[away_choice]
+        curr_away_runs = st.number_input(f"{away_choice} 當前得分", min_value=0, max_value=30, value=2)
     with col2:
-        home_team = st.selectbox("主隊 (Home Team)", all_teams, index=1)
-        curr_home_runs = st.number_input("主隊當前得分", min_value=0, max_value=30, value=3)
+        home_choice = st.selectbox("主隊 (Home Team)", mlb_labels, index=default_h_idx)
+        home_team = mlb_dropdown_map[home_choice]
+        curr_home_runs = st.number_input(f"{home_choice} 當前得分", min_value=0, max_value=30, value=3)
 
     c_inn, c_half, c_out = st.columns(3)
     with c_inn:
@@ -888,10 +1000,8 @@ def render_mlb_inplay_calculator():
     live_ou_line = st.number_input("莊家目前開出之 MLB 走地大小盤口", min_value=1.5, max_value=25.5, value=float(curr_away_runs + curr_home_runs) + 2.5, step=0.5)
 
     if st.button("🔥 立即計算 MLB 走地勝率與半局得分率", use_container_width=True, type="primary"):
-        # 1. 取得當前半局 RE24 期望得分
         curr_half_exp = mlb_sys.re24_matrix[outs].get(base_key, 0.50)
         
-        # 2. 剩餘局數計算
         is_top = ("Top" in half_inn)
         rem_away_inn = max(0, 9 - inning + (0 if is_top else 0))
         rem_home_inn = max(0, 9 - inning + (1 if is_top else 0))
