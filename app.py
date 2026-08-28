@@ -96,6 +96,15 @@ def apply_branding_css():
         font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
         letter-spacing: 6px;
     }}
+    .stat-card {{
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 12px;
+        text-align: center;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -194,32 +203,19 @@ if not st.session_state["authenticated"] and url_vip:
     if not ok:
         auth_msg = msg
 
-# ================= 模組一：歐洲足球量化引擎 (含三色回測) =================
+# ================= 模組一：歐洲足球量化與走地引擎 =================
 BASE_SOCCER_ELO = {
-    # 西甲
     "Real Madrid": 2010.0, "Barcelona": 1935.0, "Atletico Madrid": 1865.0, "Girona": 1785.0,
     "Athletic Club": 1805.0, "Athletic": 1805.0, "Real Sociedad": 1775.0, "Villarreal": 1775.0,
     "Real Betis": 1745.0, "Sevilla": 1710.0, "Celta Vigo": 1685.0, "Celta": 1685.0,
     "Osasuna": 1675.0, "Mallorca": 1680.0, "Valencia": 1690.0, "Rayo Vallecano": 1680.0,
     "Las Palmas": 1650.0, "Getafe": 1660.0, "Alaves": 1660.0, "Leganes": 1635.0,
-    "Espanyol": 1655.0, "Valladolid": 1625.0,
-    # 英超
-    "Manchester City": 2020.0, "Arsenal": 1985.0, "Liverpool": 1970.0, "Chelsea": 1835.0,
-    "Tottenham": 1815.0, "Newcastle": 1815.0, "Aston Villa": 1835.0, "Manchester United": 1785.0,
-    "Brighton": 1775.0, "West Ham": 1725.0, "Fulham": 1715.0, "Bournemouth": 1705.0,
-    "Brentford": 1705.0, "Crystal Palace": 1715.0, "Wolves": 1685.0, "Everton": 1690.0,
-    "Nottingham Forest": 1685.0, "Leicester": 1675.0, "Southampton": 1635.0, "Ipswich": 1615.0,
-    # 德甲
-    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0,
-    "RB Leipzig": 1875.0, "Stuttgart": 1835.0, "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0,
-    "Wolfsburg": 1725.0, "Mainz": 1705.0, "Augsburg": 1705.0, "Werder Bremen": 1715.0,
-    # 義甲
-    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0,
-    "Milan": 1865.0, "AC Milan": 1865.0, "Roma": 1805.0, "Lazio": 1805.0, "Napoli": 1825.0,
-    "Bologna": 1815.0, "Fiorentina": 1775.0, "Torino": 1755.0,
-    # 法甲
-    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0,
-    "Lyon": 1775.0, "Nice": 1775.0, "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0
+    "Espanyol": 1655.0, "Valladolid": 1625.0, "Manchester City": 2020.0, "Arsenal": 1985.0,
+    "Liverpool": 1970.0, "Chelsea": 1835.0, "Tottenham": 1815.0, "Newcastle": 1815.0,
+    "Aston Villa": 1835.0, "Manchester United": 1785.0, "Brighton": 1775.0, "West Ham": 1725.0,
+    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0, "RB Leipzig": 1875.0,
+    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0, "Milan": 1865.0,
+    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0
 }
 
 SOCCER_LEAGUES = {
@@ -356,13 +352,11 @@ def generate_soccer_report_cached(date_str: str):
             p_ou = f"大 2.5 ({ov_p*100:.1f}%)" if ov_p >= 0.5 else f"小 2.5 ({(1-ov_p)*100:.1f}%)"
             p_btts = f"是 ({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否 ({(1-btts_p)*100:.1f}%)"
             
-            # 預設樣式
             ml_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a; font-weight: 600;"
             spread_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a; font-weight: 600;"
             ou_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a; font-weight: 600;"
             btts_style = "padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; color: #0f172a; font-weight: 600;"
 
-            # 三色即時回測判定
             if m["score"] != "未完賽" and ":" in m["score"]:
                 try:
                     h_act, a_act = map(int, m["score"].split(":"))
@@ -370,10 +364,8 @@ def generate_soccer_report_cached(date_str: str):
                     act_diff = h_act - a_act
                     act_tot = h_act + a_act
                     
-                    # 1. 獨贏推薦 (1X2)
                     ml_style += "background-color: #dcfce7; color: #15803d;" if target_1x2 == act_res else "background-color: #fee2e2; color: #b91c1c;"
                     
-                    # 2. 讓球推薦 (含卡洞黃底)
                     if "讓-1" in spread_p:
                         spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff > 1 else ("background-color: #fef9c3; color: #854d0e;" if act_diff == 1 else "background-color: #fee2e2; color: #b91c1c;")
                     elif "讓-0.5" in spread_p:
@@ -383,12 +375,10 @@ def generate_soccer_report_cached(date_str: str):
                     else:
                         spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff > 0 else "background-color: #fee2e2; color: #b91c1c;"
 
-                    # 3. 大小分 (2.5)
                     is_over = act_tot > 2.5
                     model_is_over = ov_p >= 0.5
                     ou_style += "background-color: #dcfce7; color: #15803d;" if is_over == model_is_over else "background-color: #fee2e2; color: #b91c1c;"
                     
-                    # 4. 雙邊進球 (BTTS)
                     act_btts = (h_act > 0 and a_act > 0)
                     model_btts = (btts_p >= 0.5)
                     btts_style += "background-color: #dcfce7; color: #15803d;" if act_btts == model_btts else "background-color: #fee2e2; color: #b91c1c;"
@@ -402,7 +392,7 @@ def generate_soccer_report_cached(date_str: str):
         html_blocks.append(t_block)
     return tot, len(elo_db), "".join(html_blocks)
 
-# ================= 模組二：MLB 美棒量化系統 V9.0 (核心引擎) =================
+# ================= 模組二：MLB 美棒量化與 RE24 走地引擎 =================
 class AutomatedMLBQuantSystem:
     def __init__(self, simulations: int = 10000):
         self.simulations = simulations
@@ -500,6 +490,13 @@ class AutomatedMLBQuantSystem:
             "Athletics": {"xwOBA_vs_R": 0.302, "xwOBA_vs_L": 0.295, "bp_siera": 4.45, "team_avg_sp": 4.70},
             "Colorado Rockies": {"xwOBA_vs_R": 0.298, "xwOBA_vs_L": 0.285, "bp_siera": 4.85, "team_avg_sp": 5.20},
             "Chicago White Sox": {"xwOBA_vs_R": 0.288, "xwOBA_vs_L": 0.278, "bp_siera": 4.75, "team_avg_sp": 4.95}
+        }
+        
+        # FanGraphs 權威 RE24 得分期望矩陣 (Base-Out Run Expectancy Matrix)
+        self.re24_matrix = {
+            0: {"Empty": 0.48, "1B": 0.86, "2B": 1.10, "3B": 1.35, "12B": 1.44, "13B": 1.70, "23B": 1.96, "Loaded": 2.28},
+            1: {"Empty": 0.25, "1B": 0.51, "2B": 0.67, "3B": 0.95, "12B": 0.93, "13B": 1.14, "23B": 1.38, "Loaded": 1.54},
+            2: {"Empty": 0.10, "1B": 0.22, "2B": 0.32, "3B": 0.36, "12B": 0.44, "13B": 0.48, "23B": 0.58, "Loaded": 0.75}
         }
         
         self.fatigue_db = {}
@@ -773,6 +770,187 @@ def login_view():
             else:
                 st.error(msg)
 
+def render_soccer_inplay_calculator():
+    st.markdown("#### ⚡ 歐洲足球即時走地公允定價試算器")
+    st.caption("依據即時比賽時間衰減、落後追分強度與少打一人懲罰模型，秒出滾球公允賠率與進場訊號。")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        home_team = st.selectbox("選擇主隊 (Home Team)", list(BASE_SOCCER_ELO.keys()), index=0)
+        curr_home_score = st.number_input("主隊當前進球數", min_value=0, max_value=15, value=0)
+        home_red_cards = st.number_input("主隊紅牌數", min_value=0, max_value=3, value=0)
+    with col2:
+        away_team = st.selectbox("選擇客隊 (Away Team)", list(BASE_SOCCER_ELO.keys()), index=1)
+        curr_away_score = st.number_input("客隊當前進球數", min_value=0, max_value=15, value=0)
+        away_red_cards = st.number_input("客隊紅牌數", min_value=0, max_value=3, value=0)
+        
+    c_time, c_line = st.columns(2)
+    with c_time:
+        minute = st.slider("當前比賽進行分鐘數 (Minute)", min_value=1, max_value=90, value=65)
+    with c_line:
+        live_ou_line = st.number_input("莊家目前開出之走地大小盤口", min_value=0.5, max_value=12.5, value=float(curr_home_score + curr_away_score) + 1.5, step=0.5)
+
+    if st.button("🔥 立即計算走地公允盤口與進場訊號", use_container_width=True, type="primary"):
+        h_elo = BASE_SOCCER_ELO.get(home_team, 1650.0)
+        a_elo = BASE_SOCCER_ELO.get(away_team, 1650.0)
+        diff = h_elo - a_elo
+        
+        # 基礎全場 xG
+        base_lh = max(0.4, 1.50 * (1.0 + diff / 550.0) * 1.15)
+        base_la = max(0.3, 1.20 * (1.0 - diff / 550.0))
+        
+        # 時間衰減
+        time_rem_ratio = max(0.02, (90 - minute) / 90.0)
+        
+        # 落後追分效應
+        h_trail_boost = 1.20 if (curr_home_score < curr_away_score and minute >= 60) else 1.0
+        a_trail_boost = 1.20 if (curr_away_score < curr_home_score and minute >= 60) else 1.0
+        
+        # 紅牌懲罰
+        h_red_pen = max(0.3, 1.0 - home_red_cards * 0.35)
+        a_red_pen = max(0.3, 1.0 - away_red_cards * 0.35)
+        
+        rem_lh = base_lh * time_rem_ratio * h_trail_boost * h_red_pen * (1.0 + away_red_cards * 0.25)
+        rem_la = base_la * time_rem_ratio * a_trail_boost * a_red_pen * (1.0 + home_red_cards * 0.25)
+        
+        # 10,000 次蒙地卡羅
+        rem_hg = np.random.poisson(rem_lh, 10000)
+        rem_ag = np.random.poisson(rem_la, 10000)
+        
+        fin_hg = curr_home_score + rem_hg
+        fin_ag = curr_away_score + rem_ag
+        fin_tot = fin_hg + fin_ag
+        
+        hw_p = np.mean(fin_hg > fin_ag)
+        dr_p = np.mean(fin_hg == fin_ag)
+        aw_p = np.mean(fin_hg < fin_ag)
+        
+        over_p = np.mean(fin_tot > live_ou_line)
+        under_p = np.mean(fin_tot < live_ou_line)
+        
+        h_cn = SOCCER_CN.get(home_team, home_team)
+        a_cn = SOCCER_CN.get(away_team, away_team)
+        
+        st.markdown("---")
+        st.markdown("##### 📊 走地公允勝率與理論賠率")
+        res1, res2, res3, res4 = st.columns(4)
+        with res1:
+            fair_hw = 1.0 / max(0.01, hw_p)
+            st.metric(label=f"主勝 ({h_cn})", value=f"{hw_p*100:.1f}%", delta=f"公允賠率 {fair_hw:.2f}")
+        with res2:
+            fair_dr = 1.0 / max(0.01, dr_p)
+            st.metric(label="和局 (Draw)", value=f"{dr_p*100:.1f}%", delta=f"公允賠率 {fair_dr:.2f}")
+        with res3:
+            fair_aw = 1.0 / max(0.01, aw_p)
+            st.metric(label=f"客勝 ({a_cn})", value=f"{aw_p*100:.1f}%", delta=f"公允賠率 {fair_aw:.2f}")
+        with res4:
+            st.metric(label=f"剩餘時間期望進球", value=f"{rem_lh + rem_la:.2f} 球", delta=f"主 {rem_lh:.2f} : 客 {rem_la:.2f}")
+
+        st.markdown(f"##### 🎯 走地大小盤口 ({live_ou_line}) 價值判定")
+        if over_p >= 0.55:
+            st.success(f"🔥 **【正期望值訊號】推薦進場：大 {live_ou_line}** ｜ 模型勝率：**{over_p*100:.1f}%** (公允賠率 {1/over_p:.2f})")
+        elif under_p >= 0.55:
+            st.success(f"🛡️ **【正期望值訊號】推薦進場：小 {live_ou_line}** ｜ 模型勝率：**{under_p*100:.1f}%** (公允賠率 {1/under_p:.2f})")
+        else:
+            st.warning(f"⚖️ 盤口處於膠著平衡區間：大 {live_ou_line} ({over_p*100:.1f}%) vs 小 {live_ou_line} ({under_p*100:.1f}%)，建議觀望或等水升。")
+
+def render_mlb_inplay_calculator():
+    st.markdown("#### ⚡ MLB 美棒即時走地公允定價試算器 (RE24 矩陣)")
+    st.caption("結合 FanGraphs 權威 RE24 出局數得分期望矩陣與後援投手負二項分佈，秒算半局得分率與全場勝率。")
+    
+    mlb_sys = AutomatedMLBQuantSystem(simulations=10000)
+    all_teams = list(mlb_sys.team_ratings.keys())
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        away_team = st.selectbox("客隊 (Away Team)", all_teams, index=0)
+        curr_away_runs = st.number_input("客隊當前得分", min_value=0, max_value=30, value=2)
+    with col2:
+        home_team = st.selectbox("主隊 (Home Team)", all_teams, index=1)
+        curr_home_runs = st.number_input("主隊當前得分", min_value=0, max_value=30, value=3)
+
+    c_inn, c_half, c_out = st.columns(3)
+    with c_inn:
+        inning = st.slider("當前局數 (Inning)", min_value=1, max_value=12, value=7)
+    with c_half:
+        half_inn = st.radio("半局", ["上半局 (Top)", "下半局 (Bottom)"], horizontal=True)
+    with c_out:
+        outs = st.selectbox("出局數 (Outs)", [0, 1, 2], index=1)
+        
+    base_state = st.selectbox(
+        "壘包狀態 (Runners on Base)",
+        ["Empty (無人在壘)", "1B (一壘有人)", "2B (二壘有人)", "3B (三壘有人)", 
+         "12B (一二壘有人)", "13B (一三壘有人)", "23B (二三壘有人)", "Loaded (滿壘)"],
+        index=4
+    )
+    base_key = base_state.split(" ")[0]
+
+    live_ou_line = st.number_input("莊家目前開出之 MLB 走地大小盤口", min_value=1.5, max_value=25.5, value=float(curr_away_runs + curr_home_runs) + 2.5, step=0.5)
+
+    if st.button("🔥 立即計算 MLB 走地勝率與半局得分率", use_container_width=True, type="primary"):
+        # 1. 取得當前半局 RE24 期望得分
+        curr_half_exp = mlb_sys.re24_matrix[outs].get(base_key, 0.50)
+        
+        # 2. 剩餘局數計算
+        is_top = ("Top" in half_inn)
+        rem_away_inn = max(0, 9 - inning + (0 if is_top else 0))
+        rem_home_inn = max(0, 9 - inning + (1 if is_top else 0))
+        
+        away_data = mlb_sys.team_ratings.get(away_team, {"xwOBA_vs_R": 0.315, "bp_siera": 4.0})
+        home_data = mlb_sys.team_ratings.get(home_team, {"xwOBA_vs_R": 0.315, "bp_siera": 4.0})
+        
+        away_inn_rate = (away_data["xwOBA_vs_R"] / 0.315) * (home_data["bp_siera"] / 9.0) * 1.05
+        home_inn_rate = (home_data["xwOBA_vs_R"] / 0.315) * (away_data["bp_siera"] / 9.0) * 1.08
+        
+        if is_top:
+            rem_away_exp = curr_half_exp + (rem_away_inn - 1) * away_inn_rate
+            rem_home_exp = rem_home_inn * home_inn_rate
+        else:
+            rem_away_exp = rem_away_inn * away_inn_rate
+            rem_home_exp = curr_half_exp + (rem_home_inn - 1) * home_inn_rate
+            
+        away_sim = curr_away_runs + mlb_sys.generate_negative_binomial_runs(rem_away_exp, 10000)
+        home_sim = curr_home_runs + mlb_sys.generate_negative_binomial_runs(rem_home_exp, 10000)
+        tot_sim = away_sim + home_sim
+        
+        ties = (away_sim == home_sim)
+        tie_wins = np.random.binomial(1, 0.54, size=np.sum(ties))
+        h_win_p = (np.sum(home_sim > away_sim) + np.sum(tie_wins == 1)) / 10000.0
+        a_win_p = 1.0 - h_win_p
+        
+        over_p = np.mean(tot_sim > live_ou_line)
+        under_p = np.mean(tot_sim < live_ou_line)
+        
+        half_score_prob = min(0.95, curr_half_exp / (curr_half_exp + 0.85))
+        
+        h_cn = mlb_sys.team_cn_names.get(home_team, home_team)
+        a_cn = mlb_sys.team_cn_names.get(away_team, away_team)
+        
+        st.markdown("---")
+        st.markdown("##### ⚾ RE24 當前半局得分預期")
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            st.metric(label="當前半局期望得分 (RE24)", value=f"{curr_half_exp:.2f} 分")
+        with m2:
+            st.metric(label="本半局是否得分機率", value=f"{half_score_prob*100:.1f}%")
+        with m3:
+            st.metric(label="全場即時公允總分", value=f"{np.mean(tot_sim):.2f} 分")
+
+        st.markdown("##### 🏆 即時全場勝率與翻盤公允賠率")
+        r1, r2 = st.columns(2)
+        with r1:
+            st.metric(label=f"主勝 ({h_cn})", value=f"{h_win_p*100:.1f}%", delta=f"公允賠率 {1/max(0.01, h_win_p):.2f}")
+        with r2:
+            st.metric(label=f"客勝 ({a_cn})", value=f"{a_win_p*100:.1f}%", delta=f"公允賠率 {1/max(0.01, a_win_p):.2f}")
+
+        st.markdown(f"##### 🎯 走地大小分 ({live_ou_line}) 價值信號")
+        if over_p >= 0.54:
+            st.success(f"🔥 **【走地大分價值】推薦：大 {live_ou_line}** ｜ 模型勝率：**{over_p*100:.1f}%**")
+        elif under_p >= 0.54:
+            st.success(f"🛡️ **【走地小分價值】推薦：小 {live_ou_line}** ｜ 模型勝率：**{under_p*100:.1f}%**")
+        else:
+            st.info(f"⚖️ 走地盤口公允：大 ({over_p*100:.1f}%) vs 小 ({under_p*100:.1f}%)")
+
 def dashboard_view():
     apply_branding_css()
     render_brand_header()
@@ -845,53 +1023,73 @@ def dashboard_view():
             if "vip" in st.query_params: del st.query_params["vip"]
             st.rerun()
 
-    # ================= 畫面中央：運動項目切換區 =================
+    # ================= 核心功能切換：賽前定價 vs 即時走地試算 =================
     st.markdown("<br>", unsafe_allow_html=True)
-    c_left, c_mid, c_right = st.columns([1, 2, 1])
-    with c_mid:
-        selected_sport = st.radio(
-            "切換分析賽事",
-            options=["⚽ 歐洲頂級足球", "⚾ MLB 美棒大聯盟 (V9.0)"],
-            horizontal=True,
-            label_visibility="collapsed"
-        )
+    main_tab1, main_tab2 = st.tabs(["📊 賽前量化定價與回測 (Pre-Match)", "⚡ 即時走地公允定價試算器 (Live In-Play)"])
 
-    st.divider()
+    with main_tab1:
+        st.markdown("<br>", unsafe_allow_html=True)
+        c_left, c_mid, c_right = st.columns([1, 2, 1])
+        with c_mid:
+            selected_sport = st.radio(
+                "切換賽前分析賽事",
+                options=["⚽ 歐洲頂級足球", "⚾ MLB 美棒大聯盟 (V9.0)"],
+                horizontal=True,
+                label_visibility="collapsed"
+            )
 
-    # 足球查詢介面
-    if selected_sport == "⚽ 歐洲頂級足球":
-        st.subheader("⚽ 歐洲五大聯賽與歐冠量化定價")
-        selected_date = st.date_input("選擇足球賽事日期", value=date.today(), key="soccer_date")
-        date_str = selected_date.strftime("%Y-%m-%d")
+        st.divider()
 
-        if st.button("🔍 獲取足球即時量化與回測報告", use_container_width=True, type="primary"):
-            with st.spinner(f"正在同步 ClubElo 與運算 {date_str} 足球賽事..."):
-                count, elo_len, report_html = generate_soccer_report_cached(date_str)
-                if count == 0:
-                    st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。建議選擇週末賽事測試。")
-                else:
-                    st.success(f"✅ 成功同步 {elo_len} 隊歐洲戰力！已量化分析 {count} 場比賽！")
-                    st.markdown(report_html, unsafe_allow_html=True)
+        # 足球賽前介面
+        if selected_sport == "⚽ 歐洲頂級足球":
+            st.subheader("⚽ 歐洲五大聯賽與歐冠量化定價")
+            selected_date = st.date_input("選擇足球賽事日期", value=date.today(), key="soccer_date")
+            date_str = selected_date.strftime("%Y-%m-%d")
 
-    # MLB 查詢介面
-    else:
-        st.subheader("⚾ MLB 美國職棒大聯盟量化定價 (V9.0 負二項分佈)")
-        col_d, col_m = st.columns([2, 1])
-        with col_d:
-            selected_date = st.date_input("選擇 MLB 賽事日期", value=date.today(), key="mlb_date")
-        with col_m:
-            market_line = st.number_input("市場基準大小分盤口", min_value=5.0, max_value=15.0, value=8.5, step=0.5)
-        
-        date_str = selected_date.strftime("%Y-%m-%d")
+            if st.button("🔍 獲取足球即時量化與回測報告", use_container_width=True, type="primary"):
+                with st.spinner(f"正在同步 ClubElo 與運算 {date_str} 足球賽事..."):
+                    count, elo_len, report_html = generate_soccer_report_cached(date_str)
+                    if count == 0:
+                        st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。建議選擇週末賽事測試。")
+                    else:
+                        st.success(f"✅ 成功同步 {elo_len} 隊歐洲戰力！已量化分析 {count} 場比賽！")
+                        st.markdown(report_html, unsafe_allow_html=True)
 
-        if st.button("🔍 獲取 MLB 即時量化與回測報告", use_container_width=True, type="primary"):
-            with st.spinner(f"正在抓取先發投手、昨日牛棚、主審與氣象數據，啟動 10,000 次量化模擬 {date_str} 賽事..."):
-                count, report_html = generate_mlb_report_cached(date_str, market_line)
-                if count == 0:
-                    st.warning(f"📅 【{date_str}】 當日 MLB「無比賽場次」。")
-                else:
-                    st.success(f"✅ 成功抓取 {count} 場 MLB 比賽，完成 10,000 次負二項分佈量化模擬！")
-                    st.markdown(report_html, unsafe_allow_html=True)
+        # MLB 賽前介面
+        else:
+            st.subheader("⚾ MLB 美國職棒大聯盟量化定價 (V9.0 負二項分佈)")
+            col_d, col_m = st.columns([2, 1])
+            with col_d:
+                selected_date = st.date_input("選擇 MLB 賽事日期", value=date.today(), key="mlb_date")
+            with col_m:
+                market_line = st.number_input("市場基準大小分盤口", min_value=5.0, max_value=15.0, value=8.5, step=0.5)
+            
+            date_str = selected_date.strftime("%Y-%m-%d")
+
+            if st.button("🔍 獲取 MLB 即時量化與回測報告", use_container_width=True, type="primary"):
+                with st.spinner(f"正在抓取先發投手、昨日牛棚、主審與氣象數據，啟動 10,000 次量化模擬 {date_str} 賽事..."):
+                    count, report_html = generate_mlb_report_cached(date_str, market_line)
+                    if count == 0:
+                        st.warning(f"📅 【{date_str}】 當日 MLB「無比賽場次」。")
+                    else:
+                        st.success(f"✅ 成功抓取 {count} 場 MLB 比賽，完成 10,000 次負二項分佈量化模擬！")
+                        st.markdown(report_html, unsafe_allow_html=True)
+
+    with main_tab2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        c_left2, c_mid2, c_right2 = st.columns([1, 2, 1])
+        with c_mid2:
+            live_sport = st.radio(
+                "選擇走地試算項目",
+                options=["⚽ 歐洲足球走地定價", "⚾ MLB 美棒走地定價 (RE24)"],
+                horizontal=True,
+                label_visibility="collapsed"
+            )
+        st.divider()
+        if live_sport == "⚽ 歐洲足球走地定價":
+            render_soccer_inplay_calculator()
+        else:
+            render_mlb_inplay_calculator()
 
 # ================= 流程路由控制 =================
 if not st.session_state["authenticated"]:
