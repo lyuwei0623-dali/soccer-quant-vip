@@ -237,7 +237,6 @@ SOCCER_GOALS = {
     "fra.1": {"home": 1.42, "away": 1.12}, "uefa.champions": {"home": 1.58, "away": 1.28}
 }
 
-# 繁體中文台灣慣用隊名映射字典
 SOCCER_CN = {
     # 英超
     "Manchester City": "曼城", "Arsenal": "兵工廠", "Liverpool": "利物浦", "Chelsea": "切爾西",
@@ -268,83 +267,37 @@ SOCCER_CN = {
     "Lyon": "里昂", "Nice": "尼斯", "Lens": "朗斯", "Brest": "布雷斯特", "Rennes": "雷恩"
 }
 
-# 走地專屬：依聯賽分類的台灣繁體選單字典
 SOCCER_INPLAY_DROPDOWN = {
     # 英超
-    "【英超】兵工廠": "Arsenal",
-    "【英超】曼城": "Manchester City",
-    "【英超】利物浦": "Liverpool",
-    "【英超】切爾西": "Chelsea",
-    "【英超】熱刺": "Tottenham",
-    "【英超】曼聯": "Manchester United",
-    "【英超】阿斯頓維拉": "Aston Villa",
-    "【英超】紐卡索聯": "Newcastle",
-    "【英超】布萊頓": "Brighton",
-    "【英超】西漢姆聯": "West Ham",
-    "【英超】富勒姆": "Fulham",
-    "【英超】水晶宮": "Crystal Palace",
-    "【英超】伯恩茅斯": "Bournemouth",
-    "【英超】布倫特福德": "Brentford",
-    "【英超】艾佛頓": "Everton",
-    "【英超】狼隊": "Wolves",
-    "【英超】諾丁漢森林": "Nottingham Forest",
-    "【英超】萊斯特城": "Leicester",
-    "【英超】南安普敦": "Southampton",
-    "【英超】伊普斯維奇": "Ipswich",
+    "【英超】兵工廠": "Arsenal", "【英超】曼城": "Manchester City", "【英超】利物浦": "Liverpool",
+    "【英超】切爾西": "Chelsea", "【英超】熱刺": "Tottenham", "【英超】曼聯": "Manchester United",
+    "【英超】阿斯頓維拉": "Aston Villa", "【英超】紐卡索聯": "Newcastle", "【英超】布萊頓": "Brighton",
+    "【英超】西漢姆聯": "West Ham", "【英超】富勒姆": "Fulham", "【英超】水晶宮": "Crystal Palace",
+    "【英超】伯恩茅斯": "Bournemouth", "【英超】布倫特福德": "Brentford", "【英超】艾佛頓": "Everton",
+    "【英超】狼隊": "Wolves", "【英超】諾丁漢森林": "Nottingham Forest", "【英超】萊斯特城": "Leicester",
+    "【英超】南安普敦": "Southampton", "【英超】伊普斯維奇": "Ipswich",
     # 西甲
-    "【西甲】皇家馬德里": "Real Madrid",
-    "【西甲】巴塞隆納": "Barcelona",
-    "【西甲】馬德里競技": "Atletico Madrid",
-    "【西甲】赫羅納": "Girona",
-    "【西甲】畢爾包競技": "Athletic Club",
-    "【西甲】皇家社會": "Real Sociedad",
-    "【西甲】比利亞雷亞爾": "Villarreal",
-    "【西甲】皇家貝提斯": "Real Betis",
-    "【西甲】塞維亞": "Sevilla",
-    "【西甲】瓦倫西亞": "Valencia",
-    "【西甲】奧薩蘇納": "Osasuna",
-    "【西甲】塞爾塔": "Celta Vigo",
-    "【西甲】馬約卡": "Mallorca",
-    "【西甲】巴列卡諾": "Rayo Vallecano",
-    "【西甲】阿拉維斯": "Alaves",
-    "【西甲】赫塔菲": "Getafe",
-    "【西甲】西班牙人": "Espanyol",
-    "【西甲】拉斯帕爾馬斯": "Las Palmas",
-    "【西甲】萊加內斯": "Leganes",
-    "【西甲】瓦拉多利德": "Valladolid",
+    "【西甲】皇家馬德里": "Real Madrid", "【西甲】巴塞隆納": "Barcelona", "【西甲】馬德里競技": "Atletico Madrid",
+    "【西甲】赫羅納": "Girona", "【西甲】畢爾包競技": "Athletic Club", "【西甲】皇家社會": "Real Sociedad",
+    "【西甲】比利亞雷亞爾": "Villarreal", "【西甲】皇家貝提斯": "Real Betis", "【西甲】塞維亞": "Sevilla",
+    "【西甲】瓦倫西亞": "Valencia", "【西甲】奧薩蘇納": "Osasuna", "【西甲】塞爾塔": "Celta Vigo",
+    "【西甲】馬約卡": "Mallorca", "【西甲】巴列卡諾": "Rayo Vallecano", "【西甲】阿拉維斯": "Alaves",
+    "【西甲】赫塔菲": "Getafe", "【西甲】西班牙人": "Espanyol", "【西甲】拉斯帕爾馬斯": "Las Palmas",
+    "【西甲】萊加內斯": "Leganes", "【西甲】瓦拉多利德": "Valladolid",
     # 德甲
-    "【德甲】拜仁慕尼黑": "Bayern Munich",
-    "【德甲】勒沃庫森": "Bayer Leverkusen",
-    "【德甲】多特蒙德": "Borussia Dortmund",
-    "【德甲】RB萊比錫": "RB Leipzig",
-    "【德甲】斯圖加特": "Stuttgart",
-    "【德甲】法蘭克福": "Eintracht Frankfurt",
-    "【德甲】弗萊堡": "Freiburg",
-    "【德甲】狼堡": "Wolfsburg",
-    "【德甲】梅因斯": "Mainz",
-    "【德甲】奧格斯堡": "Augsburg",
-    "【德甲】雲達不萊梅": "Werder Bremen",
+    "【德甲】拜仁慕尼黑": "Bayern Munich", "【德甲】勒沃庫森": "Bayer Leverkusen", "【德甲】多特蒙德": "Borussia Dortmund",
+    "【德甲】RB萊比錫": "RB Leipzig", "【德甲】斯圖加特": "Stuttgart", "【德甲】法蘭克福": "Eintracht Frankfurt",
+    "【德甲】弗萊堡": "Freiburg", "【德甲】狼堡": "Wolfsburg", "【德甲】梅因斯": "Mainz",
+    "【德甲】奧格斯堡": "Augsburg", "【德甲】雲達不萊梅": "Werder Bremen",
     # 義甲
-    "【義甲】國際米蘭": "Inter",
-    "【義甲】尤文圖斯": "Juventus",
-    "【義甲】AC米蘭": "Milan",
-    "【義甲】亞特蘭大": "Atalanta",
-    "【義甲】拿坡里": "Napoli",
-    "【義甲】羅馬": "Roma",
-    "【義甲】拉齊奧": "Lazio",
-    "【義甲】波隆那": "Bologna",
-    "【義甲】佛倫提那": "Fiorentina",
+    "【義甲】國際米蘭": "Inter", "【義甲】尤文圖斯": "Juventus", "【義甲】AC米蘭": "Milan",
+    "【義甲】亞特蘭大": "Atalanta", "【義甲】拿坡里": "Napoli", "【義甲】羅馬": "Roma",
+    "【義甲】拉齊奧": "Lazio", "【義甲】波隆那": "Bologna", "【義甲】佛倫提那": "Fiorentina",
     "【義甲】都靈": "Torino",
     # 法甲
-    "【法甲】巴黎聖日耳曼": "Paris Saint-Germain",
-    "【法甲】摩納哥": "Monaco",
-    "【法甲】里爾": "Lille",
-    "【法甲】馬賽": "Marseille",
-    "【法甲】里昂": "Lyon",
-    "【法甲】尼斯": "Nice",
-    "【法甲】朗斯": "Lens",
-    "【法甲】布雷斯特": "Brest",
-    "【法甲】雷恩": "Rennes"
+    "【法甲】巴黎聖日耳曼": "Paris Saint-Germain", "【法甲】摩納哥": "Monaco", "【法甲】里爾": "Lille",
+    "【法甲】馬賽": "Marseille", "【法甲】里昂": "Lyon", "【法甲】尼斯": "Nice",
+    "【法甲】朗斯": "Lens", "【法甲】布雷斯特": "Brest", "【法甲】雷恩": "Rennes"
 }
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -425,18 +378,7 @@ def generate_soccer_report_cached(date_str: str):
             ov_p = np.mean((hg + ag) > 2.5)
             btts_p = np.mean((hg > 0) & (ag > 0))
             
-            g_diff = hg - ag
-            h_cov_1 = np.mean(g_diff > 1)
-            h_cov_half = np.mean(g_diff > 0)
-            a_cov_half = np.mean(g_diff <= 0)
-            
-            if hw_p >= 0.55:
-                spread_p = f"{h_cn} 讓-1 ({h_cov_1*100:.1f}%)" if h_cov_1 >= 0.42 else f"{h_cn} 讓-0.5 ({h_cov_half*100:.1f}%)"
-            elif aw_p >= 0.48:
-                spread_p = f"{a_cn} 讓-0.5 ({aw_p*100:.1f}%)"
-            else:
-                spread_p = f"{a_cn} 受+0.5 ({a_cov_half*100:.1f}%)" if aw_p > hw_p else f"{h_cn} 讓-0.5 ({h_cov_half*100:.1f}%)"
-
+            # 獨贏判定 (1X2)
             max_1x2 = max(hw_p, dr_p, aw_p)
             if max_1x2 == hw_p:
                 p_1x2, target_1x2 = f"{h_cn} 主勝 ({hw_p*100:.1f}%)", "HOME"
@@ -444,6 +386,37 @@ def generate_soccer_report_cached(date_str: str):
                 p_1x2, target_1x2 = f"{a_cn} 客勝 ({aw_p*100:.1f}%)", "AWAY"
             else:
                 p_1x2, target_1x2 = f"平局 ({dr_p*100:.1f}%)", "DRAW"
+
+            # 讓球正規判定：誰強誰讓（主讓 vs 客讓）
+            g_diff = hg - ag # 主 - 客
+            if hw_p >= aw_p:
+                # 主隊為讓球方 (主讓 -0.5 或 -1)
+                h_cov_1 = np.mean(g_diff > 1)
+                if hw_p >= 0.58 and h_cov_1 >= 0.42:
+                    spread_p = f"{h_cn} 讓-1 ({h_cov_1*100:.1f}%)"
+                    spread_target = "HOME_M1"
+                elif hw_p >= 0.50:
+                    spread_p = f"{h_cn} 讓-0.5 ({hw_p*100:.1f}%)"
+                    spread_target = "HOME_M05"
+                else:
+                    # 主隊讓不出球，推薦客隊受讓 (+0.5，即客勝或和局)
+                    a_cov_half = np.mean(g_diff <= 0)
+                    spread_p = f"{a_cn} 受+0.5 ({a_cov_half*100:.1f}%)"
+                    spread_target = "AWAY_P05"
+            else:
+                # 客隊為讓球方 (客讓 -0.5 或 -1)
+                a_cov_1 = np.mean(g_diff < -1)
+                if aw_p >= 0.58 and a_cov_1 >= 0.42:
+                    spread_p = f"{a_cn} 讓-1 ({a_cov_1*100:.1f}%)"
+                    spread_target = "AWAY_M1"
+                elif aw_p >= 0.50:
+                    spread_p = f"{a_cn} 讓-0.5 ({aw_p*100:.1f}%)"
+                    spread_target = "AWAY_M05"
+                else:
+                    # 客隊讓不出球，推薦主隊受讓 (+0.5，即主勝或和局)
+                    h_cov_half = np.mean(g_diff >= 0)
+                    spread_p = f"{h_cn} 受+0.5 ({h_cov_half*100:.1f}%)"
+                    spread_target = "HOME_P05"
 
             p_ou = f"大 2.5 ({ov_p*100:.1f}%)" if ov_p >= 0.5 else f"小 2.5 ({(1-ov_p)*100:.1f}%)"
             p_btts = f"是 ({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否 ({(1-btts_p)*100:.1f}%)"
@@ -460,21 +433,29 @@ def generate_soccer_report_cached(date_str: str):
                     act_diff = h_act - a_act
                     act_tot = h_act + a_act
                     
+                    # 1. 獨贏推薦
                     ml_style += "background-color: #dcfce7; color: #15803d;" if target_1x2 == act_res else "background-color: #fee2e2; color: #b91c1c;"
                     
-                    if "讓-1" in spread_p:
+                    # 2. 讓球推薦 (含卡洞黃底)
+                    if spread_target == "HOME_M1":
                         spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff > 1 else ("background-color: #fef9c3; color: #854d0e;" if act_diff == 1 else "background-color: #fee2e2; color: #b91c1c;")
-                    elif "讓-0.5" in spread_p:
+                    elif spread_target == "HOME_M05":
                         spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff > 0 else "background-color: #fee2e2; color: #b91c1c;"
-                    elif "受+0.5" in spread_p:
+                    elif spread_target == "AWAY_P05":
+                        spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff <= 0 else "background-color: #fee2e2; color: #b91c1c;"
+                    elif spread_target == "AWAY_M1":
+                        spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff < -1 else ("background-color: #fef9c3; color: #854d0e;" if act_diff == -1 else "background-color: #fee2e2; color: #b91c1c;")
+                    elif spread_target == "AWAY_M05":
+                        spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff < 0 else "background-color: #fee2e2; color: #b91c1c;"
+                    elif spread_target == "HOME_P05":
                         spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff >= 0 else "background-color: #fee2e2; color: #b91c1c;"
-                    else:
-                        spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff > 0 else "background-color: #fee2e2; color: #b91c1c;"
 
+                    # 3. 大小分 (2.5)
                     is_over = act_tot > 2.5
                     model_is_over = ov_p >= 0.5
                     ou_style += "background-color: #dcfce7; color: #15803d;" if is_over == model_is_over else "background-color: #fee2e2; color: #b91c1c;"
                     
+                    # 4. 雙邊進球 (BTTS)
                     act_btts = (h_act > 0 and a_act > 0)
                     model_btts = (btts_p >= 0.5)
                     btts_style += "background-color: #dcfce7; color: #15803d;" if act_btts == model_btts else "background-color: #fee2e2; color: #b91c1c;"
@@ -588,7 +569,6 @@ class AutomatedMLBQuantSystem:
             "Chicago White Sox": {"xwOBA_vs_R": 0.288, "xwOBA_vs_L": 0.278, "bp_siera": 4.75, "team_avg_sp": 4.95}
         }
         
-        # FanGraphs 權威 RE24 得分期望矩陣
         self.re24_matrix = {
             0: {"Empty": 0.48, "1B": 0.86, "2B": 1.10, "3B": 1.35, "12B": 1.44, "13B": 1.70, "23B": 1.96, "Loaded": 2.28},
             1: {"Empty": 0.25, "1B": 0.51, "2B": 0.67, "3B": 0.95, "12B": 0.93, "13B": 1.14, "23B": 1.38, "Loaded": 1.54},
@@ -872,7 +852,6 @@ def render_soccer_inplay_calculator():
     
     dropdown_labels = list(SOCCER_INPLAY_DROPDOWN.keys())
     
-    # 預設選取 西甲-皇家馬德里 vs 西甲-巴塞隆納
     default_h_idx = dropdown_labels.index("【西甲】皇家馬德里") if "【西甲】皇家馬德里" in dropdown_labels else 0
     default_a_idx = dropdown_labels.index("【西甲】巴塞隆納") if "【西甲】巴塞隆納" in dropdown_labels else 1
 
@@ -899,25 +878,20 @@ def render_soccer_inplay_calculator():
         a_elo = BASE_SOCCER_ELO.get(away_team, 1650.0)
         diff = h_elo - a_elo
         
-        # 基礎全場 xG
         base_lh = max(0.4, 1.50 * (1.0 + diff / 550.0) * 1.15)
         base_la = max(0.3, 1.20 * (1.0 - diff / 550.0))
         
-        # 時間衰減
         time_rem_ratio = max(0.02, (90 - minute) / 90.0)
         
-        # 落後追分效應
         h_trail_boost = 1.20 if (curr_home_score < curr_away_score and minute >= 60) else 1.0
         a_trail_boost = 1.20 if (curr_away_score < curr_home_score and minute >= 60) else 1.0
         
-        # 紅牌懲罰
         h_red_pen = max(0.3, 1.0 - home_red_cards * 0.35)
         a_red_pen = max(0.3, 1.0 - away_red_cards * 0.35)
         
         rem_lh = base_lh * time_rem_ratio * h_trail_boost * h_red_pen * (1.0 + away_red_cards * 0.25)
         rem_la = base_la * time_rem_ratio * a_trail_boost * a_red_pen * (1.0 + home_red_cards * 0.25)
         
-        # 10,000 次蒙地卡羅
         rem_hg = np.random.poisson(rem_lh, 10000)
         rem_ag = np.random.poisson(rem_la, 10000)
         
@@ -964,7 +938,6 @@ def render_mlb_inplay_calculator():
     
     mlb_sys = AutomatedMLBQuantSystem(simulations=10000)
     
-    # 繁體中文美棒選單
     mlb_dropdown_map = {f"【美棒】{v} ({k.split()[-1]})": k for k, v in mlb_sys.team_cn_names.items()}
     mlb_labels = list(mlb_dropdown_map.keys())
     
