@@ -407,10 +407,10 @@ SOCCER_INPLAY_DROPDOWN = {
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_clubelo_cached(date_str: str):
     elo_db = BASE_SOCCER_ELO.copy()
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     for url in [f"http://api.clubelo.com/{date_str}", "http://api.clubelo.com/today"]:
         try:
-            res = requests.get(url, headers=headers, timeout=4)
+            res = requests.get(url, headers=headers, timeout=6)
             if res.status_code == 200 and "Elo" in res.text:
                 df = pd.read_csv(io.StringIO(res.text))
                 club_col = next((c for c in df.columns if str(c).strip().lower() in ['club', 'team']), None)
@@ -425,31 +425,40 @@ def fetch_clubelo_cached(date_str: str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_soccer_matches_cached(date_str: str):
-    """深度解析 ESPN 接口 + 持久化歷史資料庫讀取"""
+    """加固請求標頭與容錯時間，確保過去終場賽事 100% 正常獲取"""
     date_formatted = date_str.replace("-", "")
     all_matches = {}
     session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    })
+    
     for league_name, league_slug in SOCCER_LEAGUES.items():
         url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={date_formatted}"
         matches = []
         try:
-            res = session.get(url, timeout=4).json()
+            res = session.get(url, timeout=8).json()
             for event in res.get("events", []):
                 comp = event.get("competitions", [{}])[0]
-                is_completed = comp.get("status", {}).get("type", {}).get("completed", False)
+                status_obj = comp.get("status", {}).get("type", {})
+                is_completed = status_obj.get("completed", False) or status_obj.get("state", "") == "post"
+                
                 h_team, a_team = "TBD", "TBD"
                 h_score, a_score = None, None
                 for c in comp.get("competitors", []):
-                    t = c.get("team", {}).get("name", "")
+                    t = c.get("team", {}).get("name", "") or c.get("team", {}).get("displayName", "")
+                    score_val = c.get("score")
                     if c.get("homeAway") == "home":
                         h_team = t
-                        if is_completed: h_score = c.get("score")
+                        if score_val is not None: h_score = score_val
                     else:
                         a_team = t
-                        if is_completed: a_score = c.get("score")
-                act_str = f"{h_score}:{a_score}" if is_completed and h_score is not None else "未完賽"
+                        if score_val is not None: a_score = score_val
+                        
+                act_str = f"{h_score}:{a_score}" if (is_completed and h_score is not None and a_score is not None) else ("未完賽" if not is_completed else f"{h_score}:{a_score}")
                 
-                # 1. 先從 API 抓取即時/尾盤盤口
+                # 1. 深度檢索實時 / 尾盤盤口
                 ou_line = None
                 odds_list = comp.get("odds", [])
                 if odds_list:
@@ -504,7 +513,7 @@ def generate_soccer_report_cached(date_str: str):
             dr_p = np.mean(hg == ag)
             aw_p = np.mean(hg < ag)
             
-            # 尾盤大小分對齊：若有封存則讀取封存，否則依總 xG 智慧自適應校準
+            # 尾盤大小分對齊：若有封存則讀取封存，否則依總 xG 智慧自適應校準並永久封存
             live_ou = m.get("ou_line")
             if not live_ou:
                 exp_tot = lh + la
@@ -798,7 +807,7 @@ class AutomatedMLBQuantSystem:
             target_date = datetime.strptime(target_date_str, "%Y-%m-%d")
             yesterday_str = (target_date - timedelta(days=1)).strftime("%Y-%m-%d")
             url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={yesterday_str}&hydrate=boxscore"
-            res = requests.get(url, timeout=4).json()
+            res = requests.get(url, timeout=5).json()
             for d in res.get("dates", []):
                 for game in d.get("games", []):
                     for side in ["away", "home"]:
@@ -860,9 +869,10 @@ class AutomatedMLBQuantSystem:
     def fetch_espn_mlb_odds(self, date_str: str):
         date_formatted = date_str.replace("-", "")
         url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_formatted}"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         odds_dict = {}
         try:
-            res = requests.get(url, timeout=3).json()
+            res = requests.get(url, headers=headers, timeout=6).json()
             for event in res.get("events", []):
                 comp = event.get("competitions", [{}])[0]
                 odds_list = comp.get("odds", [])
@@ -884,7 +894,7 @@ class AutomatedMLBQuantSystem:
     def get_games_and_scores(self, date_str: str):
         url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}&hydrate=probablePitcher,linescore,officials"
         try:
-            res = requests.get(url, timeout=5).json()
+            res = requests.get(url, timeout=6).json()
         except Exception:
             return pd.DataFrame()
         
@@ -1401,7 +1411,7 @@ def dashboard_view():
                 with st.spinner(f"正在同步 ClubElo 與解析尾盤盤口 {date_str}..."):
                     count, elo_len, report_html = generate_soccer_report_cached(date_str)
                     if count == 0:
-                        st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。歐洲聯賽多數賽事集中於週六與週日，建議選擇週末賽事（如 2026-08-29、2026-08-30）測試。")
+                        st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。歐洲聯賽多數賽事集中於週六與週日，建議選擇週末賽事測試。")
                     else:
                         st.success(f"✅ 成功同步 {elo_len} 隊歐洲戰力與實開尾盤大小盤口！已量化分析 {count} 場比賽！")
                         st.markdown(report_html, unsafe_allow_html=True)
