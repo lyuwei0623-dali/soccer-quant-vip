@@ -100,7 +100,7 @@ def apply_branding_css():
     """, unsafe_allow_html=True)
 
 def render_brand_header():
-    """渲染頂部官方正版識別橫幅"""
+    """渲染頂部官方正版識別橫幅 (支援 jpg/png/webp 自動 Base64 解析)"""
     logo_html = ""
     if CUSTOM_LOGO_URL:
         logo_html = f'<img src="{CUSTOM_LOGO_URL}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #f59e0b; margin-right: 12px; object-fit: cover;">'
@@ -202,14 +202,13 @@ BASE_SOCCER_ELO = {
     "Real Betis": 1745.0, "Sevilla": 1710.0, "Celta Vigo": 1685.0, "Celta": 1685.0,
     "Osasuna": 1675.0, "Mallorca": 1680.0, "Valencia": 1690.0, "Rayo Vallecano": 1680.0,
     "Las Palmas": 1650.0, "Getafe": 1660.0, "Alaves": 1660.0, "Leganes": 1635.0,
-    "Espanyol": 1655.0, "Valladolid": 1625.0, "Malaga": 1600.0, "Deportivo": 1605.0,
+    "Espanyol": 1655.0, "Valladolid": 1625.0,
     # 英超
     "Manchester City": 2020.0, "Arsenal": 1985.0, "Liverpool": 1970.0, "Chelsea": 1835.0,
     "Tottenham": 1815.0, "Newcastle": 1815.0, "Aston Villa": 1835.0, "Manchester United": 1785.0,
     "Brighton": 1775.0, "West Ham": 1725.0, "Fulham": 1715.0, "Bournemouth": 1705.0,
     "Brentford": 1705.0, "Crystal Palace": 1715.0, "Wolves": 1685.0, "Everton": 1690.0,
     "Nottingham Forest": 1685.0, "Leicester": 1675.0, "Southampton": 1635.0, "Ipswich": 1615.0,
-    "Leeds United": 1675.0, "Leeds": 1675.0, "Sunderland": 1640.0,
     # 德甲
     "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0,
     "RB Leipzig": 1875.0, "Stuttgart": 1835.0, "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0,
@@ -239,6 +238,7 @@ SOCCER_GOALS = {
 }
 
 SOCCER_CN = {
+    # 英超
     "Manchester City": "曼城", "Arsenal": "兵工廠", "Liverpool": "利物浦", "Chelsea": "切爾西",
     "Tottenham Hotspur": "熱刺", "Tottenham": "熱刺", "Manchester United": "曼聯", "Newcastle United": "紐卡索聯",
     "Newcastle": "紐卡索聯", "Aston Villa": "阿斯頓維拉", "Brighton & Hove Albion": "布萊頓", "Brighton": "布萊頓",
@@ -246,32 +246,58 @@ SOCCER_CN = {
     "Wolves": "狼隊", "Everton": "艾佛頓", "Brentford": "布倫特福德", "Crystal Palace": "水晶宮",
     "Bournemouth": "伯恩茅斯", "Nottingham Forest": "諾丁漢森林", "Leicester City": "萊斯特城",
     "Leicester": "萊斯特城", "Ipswich Town": "伊普斯維奇", "Ipswich": "伊普斯維奇", "Southampton": "南安普敦",
-    "Leeds United": "里茲聯", "Leeds": "里茲聯", "Sunderland": "桑德蘭",
+    # 西甲
     "Real Madrid": "皇家馬德里", "Barcelona": "巴塞隆納", "Atlético Madrid": "馬德里競技", "Atletico Madrid": "馬德里競技",
     "Girona": "赫羅納", "Athletic Club": "畢爾包競技", "Athletic": "畢爾包競技", "Real Sociedad": "皇家社會",
     "Real Betis": "皇家貝提斯", "Villarreal": "比利亞雷亞爾", "Sevilla": "塞維亞", "Valencia": "瓦倫西亞",
     "Osasuna": "奧薩蘇納", "Celta Vigo": "塞爾塔", "Celta de Vigo": "塞爾塔", "Celta": "塞爾塔",
     "Mallorca": "馬約卡", "Rayo Vallecano": "巴列卡諾", "Las Palmas": "拉斯帕爾馬斯", "Getafe": "赫塔菲",
     "Alavés": "阿拉維斯", "Alaves": "阿拉維斯", "Espanyol": "西班牙人", "Leganés": "萊加內斯",
-    "Leganes": "萊加內斯", "Real Valladolid": "瓦拉多利德", "Valladolid": "瓦拉多利德", "Malaga": "馬拉加", "Málaga": "馬拉加",
-    "Deportivo La Coruña": "拉科魯尼亞", "Deportivo": "拉科魯尼亞",
+    "Leganes": "萊加內斯", "Real Valladolid": "瓦拉多利德", "Valladolid": "瓦拉多利德",
+    # 德甲
     "Bayern Munich": "拜仁慕尼黑", "Bayer Leverkusen": "勒沃庫森", "Borussia Dortmund": "多特蒙德",
     "RB Leipzig": "RB萊比錫", "Stuttgart": "斯圖加特", "Eintracht Frankfurt": "法蘭克福", "Freiburg": "弗萊堡",
     "Wolfsburg": "狼堡", "Mainz": "梅因斯", "Augsburg": "奧格斯堡", "Werder Bremen": "雲達不萊梅",
+    # 義甲
     "Inter": "國際米蘭", "Internazionale": "國際米蘭", "Inter Milan": "國際米蘭", "Atalanta": "亞特蘭大",
     "Juventus": "尤文圖斯", "Milan": "AC米蘭", "AC Milan": "AC米蘭", "Roma": "羅馬", "Lazio": "拉齊奧",
     "Napoli": "拿坡里", "Bologna": "波隆那", "Fiorentina": "佛倫提那", "Torino": "都靈",
+    # 法甲
     "Paris Saint-Germain": "巴黎聖日耳曼", "Monaco": "摩納哥", "Lille": "里爾", "Marseille": "馬賽",
     "Lyon": "里昂", "Nice": "尼斯", "Lens": "朗斯", "Brest": "布雷斯特", "Rennes": "雷恩"
 }
 
 SOCCER_INPLAY_DROPDOWN = {
+    # 英超
     "【英超】兵工廠": "Arsenal", "【英超】曼城": "Manchester City", "【英超】利物浦": "Liverpool",
     "【英超】切爾西": "Chelsea", "【英超】熱刺": "Tottenham", "【英超】曼聯": "Manchester United",
+    "【英超】阿斯頓維拉": "Aston Villa", "【英超】紐卡索聯": "Newcastle", "【英超】布萊頓": "Brighton",
+    "【英超】西漢姆聯": "West Ham", "【英超】富勒姆": "Fulham", "【英超】水晶宮": "Crystal Palace",
+    "【英超】伯恩茅斯": "Bournemouth", "【英超】布倫特福德": "Brentford", "【英超】艾佛頓": "Everton",
+    "【英超】狼隊": "Wolves", "【英超】諾丁漢森林": "Nottingham Forest", "【英超】萊斯特城": "Leicester",
+    "【英超】南安普敦": "Southampton", "【英超】伊普斯維奇": "Ipswich",
+    # 西甲
     "【西甲】皇家馬德里": "Real Madrid", "【西甲】巴塞隆納": "Barcelona", "【西甲】馬德里競技": "Atletico Madrid",
+    "【西甲】赫羅納": "Girona", "【西甲】畢爾包競技": "Athletic Club", "【西甲】皇家社會": "Real Sociedad",
+    "【西甲】比利亞雷亞爾": "Villarreal", "【西甲】皇家貝提斯": "Real Betis", "【西甲】塞維亞": "Sevilla",
+    "【西甲】瓦倫西亞": "Valencia", "【西甲】奧薩蘇納": "Osasuna", "【西甲】塞爾塔": "Celta Vigo",
+    "【西甲】馬約卡": "Mallorca", "【西甲】巴列卡諾": "Rayo Vallecano", "【西甲】阿拉維斯": "Alaves",
+    "【西甲】赫塔菲": "Getafe", "【西甲】西班牙人": "Espanyol", "【西甲】拉斯帕爾馬斯": "Las Palmas",
+    "【西甲】萊加內斯": "Leganes", "【西甲】瓦拉多利德": "Valladolid",
+    # 德甲
     "【德甲】拜仁慕尼黑": "Bayern Munich", "【德甲】勒沃庫森": "Bayer Leverkusen", "【德甲】多特蒙德": "Borussia Dortmund",
+    "【德甲】RB萊比錫": "RB Leipzig", "【德甲】斯圖加特": "Stuttgart", "【德甲】法蘭克福": "Eintracht Frankfurt",
+    "【德甲】弗萊堡": "Freiburg", "【德甲】狼堡": "Wolfsburg", "【德甲】梅因斯": "Mainz",
+    "【德甲】奧格斯堡": "Augsburg", "【德甲】雲達不萊梅": "Werder Bremen",
+    # 義甲
     "【義甲】國際米蘭": "Inter", "【義甲】尤文圖斯": "Juventus", "【義甲】AC米蘭": "Milan",
-    "【法甲】巴黎聖日耳曼": "Paris Saint-Germain", "【法甲】摩納哥": "Monaco", "【法甲】馬賽": "Marseille"
+    "【義甲】亞特蘭大": "Atalanta", "【義甲】拿坡里": "Napoli", "【義甲】羅馬": "Roma",
+    "【義甲】拉齊奧": "Lazio", "【義甲】波隆那": "Bologna", "【義甲】佛倫提那": "Fiorentina",
+    "【義甲】都靈": "Torino",
+    # 法甲
+    "【法甲】巴黎聖日耳曼": "Paris Saint-Germain", "【法甲】摩納哥": "Monaco", "【法甲】里爾": "Lille",
+    "【法甲】馬賽": "Marseille", "【法甲】里昂": "Lyon", "【法甲】尼斯": "Nice",
+    "【法甲】朗斯": "Lens", "【法甲】布雷斯特": "Brest", "【法甲】雷恩": "Rennes"
 }
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -295,6 +321,7 @@ def fetch_clubelo_cached(date_str: str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_soccer_matches_cached(date_str: str):
+    """即時抓取比分 ＋ 自動同步 ESPN / DraftKings 實時開盤盤口"""
     date_formatted = date_str.replace("-", "")
     all_matches = {}
     session = requests.Session()
@@ -318,28 +345,18 @@ def fetch_soccer_matches_cached(date_str: str):
                         if is_completed: a_score = c.get("score")
                 act_str = f"{h_score}:{a_score}" if is_completed and h_score is not None else "未完賽"
                 
+                # 自動抓取開盤大小分 (Over/Under Line)
                 ou_line = 2.5
-                spread_line = None
                 odds_list = comp.get("odds", [])
                 if odds_list:
                     try:
                         raw_ou = odds_list[0].get("overUnder", None)
                         if raw_ou is not None and float(raw_ou) > 0:
                             ou_line = float(raw_ou)
-                            
-                        raw_spread = odds_list[0].get("spread", None)
-                        if raw_spread is not None and 0.2 < abs(float(raw_spread)) <= 4.5:
-                            spread_line = abs(float(raw_spread))
-                        else:
-                            details = str(odds_list[0].get("details", ""))
-                            if details and details != "EVEN":
-                                val = abs(float(details.split(" ")[-1]))
-                                if val <= 4.5:
-                                    spread_line = val
                     except Exception:
-                        pass
+                        ou_line = 2.5
                         
-                matches.append({"home": h_team, "away": a_team, "score": act_str, "league": league_slug, "ou_line": ou_line, "spread_line": spread_line})
+                matches.append({"home": h_team, "away": a_team, "score": act_str, "league": league_slug, "ou_line": ou_line})
         except Exception:
             pass
         if matches:
@@ -366,27 +383,20 @@ def generate_soccer_report_cached(date_str: str):
             lh = max(0.4, bg["home"] * (1.0 + diff / 550.0) * 1.15)
             la = max(0.3, bg["away"] * (1.0 - diff / 550.0))
             
+            # 10,000 次蒙地卡羅
             hg = np.random.poisson(lh, 10000)
             ag = np.random.poisson(la, 10000)
             hw_p = np.mean(hg > ag)
             dr_p = np.mean(hg == ag)
             aw_p = np.mean(hg < ag)
             
-            live_spread = m.get("spread_line")
-            if live_spread is None:
-                diff_xg = abs(lh - la)
-                if diff_xg >= 1.35:
-                    live_spread = 1.5
-                elif diff_xg >= 0.65:
-                    live_spread = 1.0
-                else:
-                    live_spread = 0.5
-            
+            # 對齊當場實開的大小盤口
             live_ou = m.get("ou_line", 2.5)
             ov_p = np.mean((hg + ag) > live_ou)
             un_p = np.mean((hg + ag) < live_ou)
             btts_p = np.mean((hg > 0) & (ag > 0))
             
+            # 1. 獨贏判定 (1X2)
             max_1x2 = max(hw_p, dr_p, aw_p)
             if max_1x2 == hw_p:
                 p_1x2, target_1x2 = f"{h_cn} 主勝 ({hw_p*100:.1f}%)", "HOME"
@@ -395,34 +405,43 @@ def generate_soccer_report_cached(date_str: str):
             else:
                 p_1x2, target_1x2 = f"平局 ({dr_p*100:.1f}%)", "DRAW"
 
-            g_diff = hg - ag
+            # 2. 讓球正規判定：誰強誰讓（主讓 vs 客讓）
+            g_diff = hg - ag # 主 - 客
             if hw_p >= aw_p:
-                h_cov_prob = np.mean(g_diff > live_spread)
-                a_cov_prob = np.mean(g_diff < live_spread)
-                if h_cov_prob >= a_cov_prob:
-                    spread_p = f"{h_cn} 讓-{live_spread:g} ({h_cov_prob*100:.1f}%)"
-                    spread_target = ("HOME_FAV", live_spread)
+                h_cov_1 = np.mean(g_diff > 1)
+                if hw_p >= 0.58 and h_cov_1 >= 0.42:
+                    spread_p = f"{h_cn} 讓-1 ({h_cov_1*100:.1f}%)"
+                    spread_target = "HOME_M1"
+                elif hw_p >= 0.50:
+                    spread_p = f"{h_cn} 讓-0.5 ({hw_p*100:.1f}%)"
+                    spread_target = "HOME_M05"
                 else:
-                    spread_p = f"{a_cn} 受+{live_spread:g} ({a_cov_prob*100:.1f}%)"
-                    spread_target = ("AWAY_DOG", live_spread)
+                    a_cov_half = np.mean(g_diff <= 0)
+                    spread_p = f"{a_cn} 受+0.5 ({a_cov_half*100:.1f}%)"
+                    spread_target = "AWAY_P05"
             else:
-                a_cov_prob = np.mean(g_diff < -live_spread)
-                h_cov_prob = np.mean(g_diff > -live_spread)
-                if a_cov_prob >= h_cov_prob:
-                    spread_p = f"{a_cn} 讓-{live_spread:g} ({a_cov_prob*100:.1f}%)"
-                    spread_target = ("AWAY_FAV", live_spread)
+                a_cov_1 = np.mean(g_diff < -1)
+                if aw_p >= 0.58 and a_cov_1 >= 0.42:
+                    spread_p = f"{a_cn} 讓-1 ({a_cov_1*100:.1f}%)"
+                    spread_target = "AWAY_M1"
+                elif aw_p >= 0.50:
+                    spread_p = f"{a_cn} 讓-0.5 ({aw_p*100:.1f}%)"
+                    spread_target = "AWAY_M05"
                 else:
-                    spread_p = f"{h_cn} 受+{live_spread:g} ({h_cov_prob*100:.1f}%)"
-                    spread_target = ("HOME_DOG", live_spread)
+                    h_cov_half = np.mean(g_diff >= 0)
+                    spread_p = f"{h_cn} 受+0.5 ({h_cov_half*100:.1f}%)"
+                    spread_target = "HOME_P05"
 
+            # 3. 大小分 (對齊實開盤口)
             if ov_p >= un_p:
-                p_ou, model_ou_target = f"大 {live_ou:g} ({ov_p*100:.1f}%)", "OVER"
+                p_ou, model_ou_target = f"大 {live_ou} ({ov_p*100:.1f}%)", "OVER"
             else:
-                p_ou, model_ou_target = f"小 {live_ou:g} ({un_p*100:.1f}%)", "UNDER"
+                p_ou, model_ou_target = f"小 {live_ou} ({un_p*100:.1f}%)", "UNDER"
 
             p_btts = f"是 ({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否 ({(1-btts_p)*100:.1f}%)"
             
             cell_base = "padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
+            
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             ou_style = f"{cell_base} color: #0f172a; font-weight: 600;"
@@ -435,33 +454,32 @@ def generate_soccer_report_cached(date_str: str):
                     act_diff = h_act - a_act
                     act_tot = h_act + a_act
                     
+                    # 獨贏回測
                     ml_style += "background-color: #dcfce7; color: #15803d;" if target_1x2 == act_res else "background-color: #fee2e2; color: #b91c1c;"
                     
-                    s_type, s_line = spread_target
-                    if s_type == "HOME_FAV":
-                        if act_diff > s_line: spread_style += "background-color: #dcfce7; color: #15803d;"
-                        elif act_diff == s_line: spread_style += "background-color: #fef9c3; color: #854d0e;"
-                        else: spread_style += "background-color: #fee2e2; color: #b91c1c;"
-                    elif s_type == "AWAY_DOG":
-                        if act_diff < s_line: spread_style += "background-color: #dcfce7; color: #15803d;"
-                        elif act_diff == s_line: spread_style += "background-color: #fef9c3; color: #854d0e;"
-                        else: spread_style += "background-color: #fee2e2; color: #b91c1c;"
-                    elif s_type == "AWAY_FAV":
-                        if act_diff < -s_line: spread_style += "background-color: #dcfce7; color: #15803d;"
-                        elif act_diff == -s_line: spread_style += "background-color: #fef9c3; color: #854d0e;"
-                        else: spread_style += "background-color: #fee2e2; color: #b91c1c;"
-                    elif s_type == "HOME_DOG":
-                        if act_diff > -s_line: spread_style += "background-color: #dcfce7; color: #15803d;"
-                        elif act_diff == -s_line: spread_style += "background-color: #fef9c3; color: #854d0e;"
-                        else: spread_style += "background-color: #fee2e2; color: #b91c1c;"
+                    # 讓球回測 (含卡洞黃底)
+                    if spread_target == "HOME_M1":
+                        spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff > 1 else ("background-color: #fef9c3; color: #854d0e;" if act_diff == 1 else "background-color: #fee2e2; color: #b91c1c;")
+                    elif spread_target == "HOME_M05":
+                        spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff > 0 else "background-color: #fee2e2; color: #b91c1c;"
+                    elif spread_target == "AWAY_P05":
+                        spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff <= 0 else "background-color: #fee2e2; color: #b91c1c;"
+                    elif spread_target == "AWAY_M1":
+                        spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff < -1 else ("background-color: #fef9c3; color: #854d0e;" if act_diff == -1 else "background-color: #fee2e2; color: #b91c1c;")
+                    elif spread_target == "AWAY_M05":
+                        spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff < 0 else "background-color: #fee2e2; color: #b91c1c;"
+                    elif spread_target == "HOME_P05":
+                        spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff >= 0 else "background-color: #fee2e2; color: #b91c1c;"
 
+                    # 大小分回測 (精確對應實開盤，支援卡洞走盤黃底)
                     if act_tot == live_ou:
-                        ou_style += "background-color: #fef9c3; color: #854d0e;"
+                        ou_style += "background-color: #fef9c3; color: #854d0e;" # 走盤/走水
                     elif (act_tot > live_ou and model_ou_target == "OVER") or (act_tot < live_ou and model_ou_target == "UNDER"):
-                        ou_style += "background-color: #dcfce7; color: #15803d;"
+                        ou_style += "background-color: #dcfce7; color: #15803d;" # 命中
                     else:
-                        ou_style += "background-color: #fee2e2; color: #b91c1c;"
+                        ou_style += "background-color: #fee2e2; color: #b91c1c;" # 未命中
                     
+                    # 雙進回測
                     act_btts = (h_act > 0 and a_act > 0)
                     model_btts = (btts_p >= 0.5)
                     btts_style += "background-color: #dcfce7; color: #15803d;" if act_btts == model_btts else "background-color: #fee2e2; color: #b91c1c;"
@@ -504,8 +522,8 @@ def generate_soccer_report_cached(date_str: str):
                             <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">預估 xG</th>
                             <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">真實比分</th>
                             <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">獨贏推薦</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">讓球推薦 (對齊開盤)</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">大小推薦 (對齊開盤)</th>
+                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">讓球推薦</th>
+                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">大小推薦 (開盤)</th>
                             <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">雙進</th>
                         </tr>
                     </thead>
@@ -718,7 +736,7 @@ class AutomatedMLBQuantSystem:
         return data
 
     def fetch_espn_mlb_odds(self, date_str: str):
-        """抓取 ESPN MLB 即時大小分與讓分盤口 (嚴格過濾美式獨贏賠率)"""
+        """抓取 ESPN MLB 開盤大小分數據庫"""
         date_formatted = date_str.replace("-", "")
         url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_formatted}"
         odds_dict = {}
@@ -727,55 +745,17 @@ class AutomatedMLBQuantSystem:
             for event in res.get("events", []):
                 comp = event.get("competitions", [{}])[0]
                 odds_list = comp.get("odds", [])
-                
-                ou_val = None
-                spread_val = 1.5  # 美棒標準讓分預設值 1.5 分
-                
                 if odds_list:
-                    odds = odds_list[0]
-                    ou = odds.get("overUnder", None)
+                    ou = odds_list[0].get("overUnder", None)
                     if ou:
-                        try:
-                            ou_float = float(ou)
-                            if 5.0 <= ou_float <= 20.0:
-                                ou_val = ou_float
-                        except Exception:
-                            pass
-                    
-                    parsed_spread = None
-                    raw_spread = odds.get("spread", None)
-                    if raw_spread is not None:
-                        try:
-                            s = abs(float(raw_spread))
-                            if 0.5 <= s <= 3.5:
-                                parsed_spread = s
-                        except Exception:
-                            pass
-                    
-                    if parsed_spread is None:
-                        details = str(odds.get("details", "")).strip()
-                        if details and details != "EVEN":
-                            try:
-                                val = abs(float(details.split(" ")[-1]))
-                                if 0.5 <= val <= 3.5:
-                                    parsed_spread = val
-                            except Exception:
-                                pass
-                    
-                    if parsed_spread is not None:
-                        spread_val = parsed_spread
-                    else:
-                        spread_val = 1.5
-                
-                h_name, a_name = "", ""
-                for c in comp.get("competitors", []):
-                    if c.get("homeAway") == "home":
-                        h_name = c.get("team", {}).get("displayName", "")
-                    else:
-                        a_name = c.get("team", {}).get("displayName", "")
-                
-                if h_name and a_name:
-                    odds_dict[(a_name, h_name)] = {'ou': ou_val, 'spread': spread_val}
+                        h_name, a_name = "", ""
+                        for c in comp.get("competitors", []):
+                            if c.get("homeAway") == "home":
+                                h_name = c.get("team", {}).get("displayName", "")
+                            else:
+                                a_name = c.get("team", {}).get("displayName", "")
+                        if h_name and a_name:
+                            odds_dict[(a_name, h_name)] = float(ou)
         except Exception:
             pass
         return odds_dict
@@ -850,17 +830,8 @@ class AutomatedMLBQuantSystem:
             lambda_home = pitching_base_away * firepower_home * park_factor * weather_multiplier * ump_factor * hfa * unearned_run_multiplier
             lambda_away = pitching_base_home * firepower_away * park_factor * weather_multiplier * ump_factor * unearned_run_multiplier
             
-            game_odds = espn_odds.get((row["away_team"], row["home_team"]), {})
-            game_market_line = game_odds.get('ou')
-            raw_spread = game_odds.get('spread', 1.5)
-            
-            try:
-                live_spread = float(raw_spread)
-                if live_spread < 0.5 or live_spread > 3.5:
-                    live_spread = 1.5
-            except Exception:
-                live_spread = 1.5
-            
+            # 動態匹配該場比賽的實開盤口 (若未開盤則依模型期望總分四捨五入至 0.5 基準)
+            game_market_line = espn_odds.get((row["away_team"], row["home_team"]), None)
             if not game_market_line:
                 est_tot = lambda_away + lambda_home
                 game_market_line = round(est_tot * 2) / 2.0
@@ -877,26 +848,25 @@ class AutomatedMLBQuantSystem:
             away_ml_prob = 1.0 - home_ml_prob
             
             run_diff = home_runs - away_runs 
+            home_cover_minus1 = np.mean(run_diff > 1)      
+            away_cover_plus1 = np.mean(run_diff < 1)       
+            away_cover_minus1 = np.mean(run_diff < -1)     
+            home_cover_plus1 = np.mean(run_diff > -1)      
             
-            # 讓分盤對齊：模型判定強隊為讓分方
             if home_ml_prob >= 0.5:
-                h_cov_prob = np.mean(run_diff > live_spread)
-                a_cov_prob = np.mean(run_diff < live_spread)
-                if h_cov_prob >= a_cov_prob:
-                    spread_pick = f"{home_cn} 讓-{live_spread:g} ({h_cov_prob*100:.1f}%)"
-                    spread_target = ("HOME_FAV", live_spread)
+                if home_cover_minus1 >= 0.45:
+                    spread_pick = f"{home_cn} 讓-1 ({home_cover_minus1*100:.1f}%)"
+                    spread_target = "HOME_COVER"
                 else:
-                    spread_pick = f"{away_cn} 受+{live_spread:g} ({a_cov_prob*100:.1f}%)"
-                    spread_target = ("AWAY_DOG", live_spread)
+                    spread_pick = f"{away_cn} 受+1 ({away_cover_plus1*100:.1f}%)"
+                    spread_target = "AWAY_COVER"
             else:
-                a_cov_prob = np.mean(run_diff < -live_spread)
-                h_cov_prob = np.mean(run_diff > -live_spread)
-                if a_cov_prob >= h_cov_prob:
-                    spread_pick = f"{away_cn} 讓-{live_spread:g} ({a_cov_prob*100:.1f}%)"
-                    spread_target = ("AWAY_FAV", live_spread)
+                if away_cover_minus1 >= 0.45:
+                    spread_pick = f"{away_cn} 讓-1 ({away_cover_minus1*100:.1f}%)"
+                    spread_target = "AWAY_COVER_FAV"
                 else:
-                    spread_pick = f"{home_cn} 受+{live_spread:g} ({h_cov_prob*100:.1f}%)"
-                    spread_target = ("HOME_DOG", live_spread)
+                    spread_pick = f"{home_cn} 受+1 ({home_cover_plus1*100:.1f}%)"
+                    spread_target = "HOME_COVER_DOG"
 
             total_runs = home_runs + away_runs
             over_prob = np.mean(total_runs > game_market_line)
@@ -906,7 +876,7 @@ class AutomatedMLBQuantSystem:
             model_ou_pick = "大分" if over_prob >= under_prob else "小分"
             
             ml_text = f"{model_ml_pick_name} ({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
-            ou_text = f"{model_ou_pick} {game_market_line:g} ({max(over_prob, under_prob)*100:.1f}%)"
+            ou_text = f"{model_ou_pick} {game_market_line} ({max(over_prob, under_prob)*100:.1f}%)"
             
             ml_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600;"
             spread_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600;"
@@ -921,30 +891,22 @@ class AutomatedMLBQuantSystem:
                 
                 ml_style += "background-color: #dcfce7; color: #15803d;" if model_ml_pick_name == actual_ml_winner_name else "background-color: #fee2e2; color: #b91c1c;"
                     
-                s_type, s_line = spread_target
-                if s_type == "HOME_FAV":
-                    if actual_diff > s_line: spread_style += "background-color: #dcfce7; color: #15803d;"
-                    elif actual_diff == s_line: spread_style += "background-color: #fef9c3; color: #854d0e;"
-                    else: spread_style += "background-color: #fee2e2; color: #b91c1c;"
-                elif s_type == "AWAY_DOG":
-                    if actual_diff < s_line: spread_style += "background-color: #dcfce7; color: #15803d;"
-                    elif actual_diff == s_line: spread_style += "background-color: #fef9c3; color: #854d0e;"
-                    else: spread_style += "background-color: #fee2e2; color: #b91c1c;"
-                elif s_type == "AWAY_FAV":
-                    if actual_diff < -s_line: spread_style += "background-color: #dcfce7; color: #15803d;"
-                    elif actual_diff == -s_line: spread_style += "background-color: #fef9c3; color: #854d0e;"
-                    else: spread_style += "background-color: #fee2e2; color: #b91c1c;"
-                elif s_type == "HOME_DOG":
-                    if actual_diff > -s_line: spread_style += "background-color: #dcfce7; color: #15803d;"
-                    elif actual_diff == -s_line: spread_style += "background-color: #fef9c3; color: #854d0e;"
-                    else: spread_style += "background-color: #fee2e2; color: #b91c1c;"
+                if spread_target == "HOME_COVER":
+                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff > 1 else ("background-color: #fef9c3; color: #854d0e;" if actual_diff == 1 else "background-color: #fee2e2; color: #b91c1c;")
+                elif spread_target == "AWAY_COVER":
+                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff <= 0 else ("background-color: #fef9c3; color: #854d0e;" if actual_diff == 1 else "background-color: #fee2e2; color: #b91c1c;")
+                elif spread_target == "AWAY_COVER_FAV":
+                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff < -1 else ("background-color: #fef9c3; color: #854d0e;" if actual_diff == -1 else "background-color: #fee2e2; color: #b91c1c;")
+                elif spread_target == "HOME_COVER_DOG":
+                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff >= 0 else ("background-color: #fef9c3; color: #854d0e;" if actual_diff == -1 else "background-color: #fee2e2; color: #b91c1c;")
                     
+                # 大小分回測 (精準支援卡洞走盤)
                 if actual_total == game_market_line:
-                    ou_style += "background-color: #fef9c3; color: #854d0e;"
+                    ou_style += "background-color: #fef9c3; color: #854d0e;" # 走盤
                 elif (actual_total > game_market_line and model_ou_pick == "大分") or (actual_total < game_market_line and model_ou_pick == "小分"):
-                    ou_style += "background-color: #dcfce7; color: #15803d;"
+                    ou_style += "background-color: #dcfce7; color: #15803d;" # 命中
                 else:
-                    ou_style += "background-color: #fee2e2; color: #b91c1c;"
+                    ou_style += "background-color: #fee2e2; color: #b91c1c;" # 未命中
             else:
                 actual_score_str = "未完賽"
 
@@ -985,8 +947,8 @@ class AutomatedMLBQuantSystem:
                             <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">預估分(客:主)</th>
                             <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">真實比分</th>
                             <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">獨贏推薦</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">讓分推薦 (對齊開盤)</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">大小推薦 (對齊開盤)</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">讓分推薦 (±1)</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">大小推薦 (開盤對齊)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1029,6 +991,7 @@ def render_soccer_inplay_calculator():
     st.caption("依據五大聯賽各隊即時時間衰減、落後追分強度與少打一人懲罰模型，秒出滾球公允賠率與進場訊號。")
     
     dropdown_labels = list(SOCCER_INPLAY_DROPDOWN.keys())
+    
     default_h_idx = dropdown_labels.index("【西甲】皇家馬德里") if "【西甲】皇家馬德里" in dropdown_labels else 0
     default_a_idx = dropdown_labels.index("【西甲】巴塞隆納") if "【西甲】巴塞隆納" in dropdown_labels else 1
 
@@ -1114,6 +1077,7 @@ def render_mlb_inplay_calculator():
     st.caption("結合 FanGraphs 權威 RE24 出局數得分期望矩陣與後援投手負二項分佈，秒算半局得分率與全場勝率。")
     
     mlb_sys = AutomatedMLBQuantSystem(simulations=10000)
+    
     mlb_dropdown_map = {f"【美棒】{v} ({k.split()[-1]})": k for k, v in mlb_sys.team_cn_names.items()}
     mlb_labels = list(mlb_dropdown_map.keys())
     
@@ -1214,6 +1178,7 @@ def dashboard_view():
     apply_branding_css()
     render_brand_header()
 
+    # 1. 管理員專屬控制台
     if st.session_state.get("is_admin", False):
         with st.expander("🛠️ **管理員控制台 (VIP 代碼生成與管理)**", expanded=False):
             st.markdown("##### 📌 一鍵生成 VIP 7 天防轉傳專屬代碼")
@@ -1262,11 +1227,13 @@ def dashboard_view():
                             st.success(f"已解綁 {info['user_name']}")
                             st.rerun()
 
+    # 2. 一般會員頂部歡迎條
     elif st.session_state.get("user_name"):
         rem = st.session_state.get("days_left", 7)
         curr_tok = st.session_state.get("current_token", "")
         st.info(f"✨ 歡迎 VIP 會員 **{st.session_state['user_name']}** ｜ 您的通行碼： `{curr_tok}` ｜ 有效期剩餘： **{rem} 天**")
 
+    # 頂部導航
     col_t, col_l = st.columns([4, 1])
     with col_t:
         st.header("🏆 職業體育雙向量化定價系統")
@@ -1279,6 +1246,7 @@ def dashboard_view():
             if "vip" in st.query_params: del st.query_params["vip"]
             st.rerun()
 
+    # ================= 核心功能切換：賽前定價 vs 即時走地試算 =================
     st.markdown("<br>", unsafe_allow_html=True)
     main_tab1, main_tab2 = st.tabs(["📊 賽前量化定價與回測 (Pre-Match)", "⚡ 即時走地公允定價試算器 (Live In-Play)"])
 
@@ -1295,32 +1263,34 @@ def dashboard_view():
 
         st.divider()
 
+        # 足球賽前介面
         if selected_sport == "⚽ 歐洲頂級足球":
             st.subheader("⚽ 歐洲五大聯賽與歐冠量化定價 (實時開盤對齊)")
             selected_date = st.date_input("選擇足球賽事日期", value=date.today(), key="soccer_date")
             date_str = selected_date.strftime("%Y-%m-%d")
 
             if st.button("🔍 獲取足球即時量化與回測報告", use_container_width=True, type="primary"):
-                with st.spinner(f"正在同步 ClubElo 與 ESPN 即時盤口/尾盤數據 {date_str}..."):
+                with st.spinner(f"正在同步 ClubElo 與 ESPN 實時開盤數據 {date_str}..."):
                     count, elo_len, report_html = generate_soccer_report_cached(date_str)
                     if count == 0:
-                        st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。")
+                        st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。建議選擇週末賽事測試。")
                     else:
-                        st.success(f"✅ 成功同步 {elo_len} 隊歐洲戰力與動態讓分/大小盤口！已量化分析 {count} 場比賽！")
+                        st.success(f"✅ 成功同步 {elo_len} 隊歐洲戰力與實時大小球盤口！已量化分析 {count} 場比賽！")
                         st.markdown(report_html, unsafe_allow_html=True)
 
+        # MLB 賽前介面
         else:
             st.subheader("⚾ MLB 美國職棒大聯盟量化定價 (實時開盤對齊)")
             selected_date = st.date_input("選擇 MLB 賽事日期", value=date.today(), key="mlb_date")
             date_str = selected_date.strftime("%Y-%m-%d")
 
             if st.button("🔍 獲取 MLB 即時量化與回測報告", use_container_width=True, type="primary"):
-                with st.spinner(f"正在抓取先發投手、即時動態盤口數據，啟動 10,000 次量化模擬 {date_str} 賽事..."):
+                with st.spinner(f"正在抓取先發投手、氣象與實時大小分開盤數據，啟動 10,000 次量化模擬 {date_str} 賽事..."):
                     count, report_html = generate_mlb_report_cached(date_str)
                     if count == 0:
                         st.warning(f"📅 【{date_str}】 當日 MLB「無比賽場次」。")
                     else:
-                        st.success(f"✅ 成功抓取 {count} 場 MLB 比賽，已自動對齊實開大小分與讓分盤完成 10,000 次模擬！")
+                        st.success(f"✅ 成功抓取 {count} 場 MLB 比賽，已自動對齊各球場實開盤口完成 10,000 次模擬！")
                         st.markdown(report_html, unsafe_allow_html=True)
 
     with main_tab2:
@@ -1339,6 +1309,7 @@ def dashboard_view():
         else:
             render_mlb_inplay_calculator()
 
+# ================= 流程路由控制 =================
 if not st.session_state["authenticated"]:
     login_view()
 else:
