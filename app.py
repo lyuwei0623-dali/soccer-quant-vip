@@ -295,7 +295,6 @@ def fetch_clubelo_cached(date_str: str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_soccer_matches_cached(date_str: str):
-    """即時抓取比分 ＋ 同步 ESPN 開盤/尾盤盤口 (過濾美式獨贏賠率)"""
     date_formatted = date_str.replace("-", "")
     all_matches = {}
     session = requests.Session()
@@ -319,7 +318,6 @@ def fetch_soccer_matches_cached(date_str: str):
                         if is_completed: a_score = c.get("score")
                 act_str = f"{h_score}:{a_score}" if is_completed and h_score is not None else "未完賽"
                 
-                # 自動抓取開盤大小分與讓球盤 (防呆排除美式賠率 +105, -160 等)
                 ou_line = 2.5
                 spread_line = None
                 odds_list = comp.get("odds", [])
@@ -336,7 +334,7 @@ def fetch_soccer_matches_cached(date_str: str):
                             details = str(odds_list[0].get("details", ""))
                             if details and details != "EVEN":
                                 val = abs(float(details.split(" ")[-1]))
-                                if val <= 4.5:  # 只有 <= 4.5 才是讓球，避免抓到美式賠率
+                                if val <= 4.5:
                                     spread_line = val
                     except Exception:
                         pass
@@ -368,14 +366,12 @@ def generate_soccer_report_cached(date_str: str):
             lh = max(0.4, bg["home"] * (1.0 + diff / 550.0) * 1.15)
             la = max(0.3, bg["away"] * (1.0 - diff / 550.0))
             
-            # 10,000 次蒙地卡羅
             hg = np.random.poisson(lh, 10000)
             ag = np.random.poisson(la, 10000)
             hw_p = np.mean(hg > ag)
             dr_p = np.mean(hg == ag)
             aw_p = np.mean(hg < ag)
             
-            # 若無開出讓球盤，依雙方實力期望差配置公允讓球 (0.5 / 1.0 / 1.5)
             live_spread = m.get("spread_line")
             if live_spread is None:
                 diff_xg = abs(lh - la)
@@ -391,7 +387,6 @@ def generate_soccer_report_cached(date_str: str):
             un_p = np.mean((hg + ag) < live_ou)
             btts_p = np.mean((hg > 0) & (ag > 0))
             
-            # 1. 獨贏判定 (1X2)
             max_1x2 = max(hw_p, dr_p, aw_p)
             if max_1x2 == hw_p:
                 p_1x2, target_1x2 = f"{h_cn} 主勝 ({hw_p*100:.1f}%)", "HOME"
@@ -400,37 +395,34 @@ def generate_soccer_report_cached(date_str: str):
             else:
                 p_1x2, target_1x2 = f"平局 ({dr_p*100:.1f}%)", "DRAW"
 
-            # 2. 讓球正規判定：加權勝率強隊為讓分方
             g_diff = hg - ag
-            if hw_p >= aw_p:  # 主隊較強
+            if hw_p >= aw_p:
                 h_cov_prob = np.mean(g_diff > live_spread)
                 a_cov_prob = np.mean(g_diff < live_spread)
                 if h_cov_prob >= a_cov_prob:
-                    spread_p = f"{h_cn} 讓-{live_spread} ({h_cov_prob*100:.1f}%)"
+                    spread_p = f"{h_cn} 讓-{live_spread:g} ({h_cov_prob*100:.1f}%)"
                     spread_target = ("HOME_FAV", live_spread)
                 else:
-                    spread_p = f"{a_cn} 受+{live_spread} ({a_cov_prob*100:.1f}%)"
+                    spread_p = f"{a_cn} 受+{live_spread:g} ({a_cov_prob*100:.1f}%)"
                     spread_target = ("AWAY_DOG", live_spread)
-            else:  # 客隊較強
+            else:
                 a_cov_prob = np.mean(g_diff < -live_spread)
                 h_cov_prob = np.mean(g_diff > -live_spread)
                 if a_cov_prob >= h_cov_prob:
-                    spread_p = f"{a_cn} 讓-{live_spread} ({a_cov_prob*100:.1f}%)"
+                    spread_p = f"{a_cn} 讓-{live_spread:g} ({a_cov_prob*100:.1f}%)"
                     spread_target = ("AWAY_FAV", live_spread)
                 else:
-                    spread_p = f"{h_cn} 受+{live_spread} ({h_cov_prob*100:.1f}%)"
+                    spread_p = f"{h_cn} 受+{live_spread:g} ({h_cov_prob*100:.1f}%)"
                     spread_target = ("HOME_DOG", live_spread)
 
-            # 3. 大小分 (對齊實開盤口)
             if ov_p >= un_p:
-                p_ou, model_ou_target = f"大 {live_ou} ({ov_p*100:.1f}%)", "OVER"
+                p_ou, model_ou_target = f"大 {live_ou:g} ({ov_p*100:.1f}%)", "OVER"
             else:
-                p_ou, model_ou_target = f"小 {live_ou} ({un_p*100:.1f}%)", "UNDER"
+                p_ou, model_ou_target = f"小 {live_ou:g} ({un_p*100:.1f}%)", "UNDER"
 
             p_btts = f"是 ({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否 ({(1-btts_p)*100:.1f}%)"
             
             cell_base = "padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
-            
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             ou_style = f"{cell_base} color: #0f172a; font-weight: 600;"
@@ -443,10 +435,8 @@ def generate_soccer_report_cached(date_str: str):
                     act_diff = h_act - a_act
                     act_tot = h_act + a_act
                     
-                    # 獨贏回測
                     ml_style += "background-color: #dcfce7; color: #15803d;" if target_1x2 == act_res else "background-color: #fee2e2; color: #b91c1c;"
                     
-                    # 讓球回測 (支援卡洞黃底)
                     s_type, s_line = spread_target
                     if s_type == "HOME_FAV":
                         if act_diff > s_line: spread_style += "background-color: #dcfce7; color: #15803d;"
@@ -465,7 +455,6 @@ def generate_soccer_report_cached(date_str: str):
                         elif act_diff == -s_line: spread_style += "background-color: #fef9c3; color: #854d0e;"
                         else: spread_style += "background-color: #fee2e2; color: #b91c1c;"
 
-                    # 大小分回測 (支援走盤黃底)
                     if act_tot == live_ou:
                         ou_style += "background-color: #fef9c3; color: #854d0e;"
                     elif (act_tot > live_ou and model_ou_target == "OVER") or (act_tot < live_ou and model_ou_target == "UNDER"):
@@ -473,7 +462,6 @@ def generate_soccer_report_cached(date_str: str):
                     else:
                         ou_style += "background-color: #fee2e2; color: #b91c1c;"
                     
-                    # 雙進回測
                     act_btts = (h_act > 0 and a_act > 0)
                     model_btts = (btts_p >= 0.5)
                     btts_style += "background-color: #dcfce7; color: #15803d;" if act_btts == model_btts else "background-color: #fee2e2; color: #b91c1c;"
@@ -730,7 +718,7 @@ class AutomatedMLBQuantSystem:
         return data
 
     def fetch_espn_mlb_odds(self, date_str: str):
-        """抓取 ESPN MLB 即時大小分與讓分盤口 (防呆排除美式賠率)"""
+        """抓取 ESPN MLB 即時大小分與讓分盤口 (嚴格過濾美式獨贏賠率)"""
         date_formatted = date_str.replace("-", "")
         url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_formatted}"
         odds_dict = {}
@@ -741,21 +729,43 @@ class AutomatedMLBQuantSystem:
                 odds_list = comp.get("odds", [])
                 
                 ou_val = None
-                spread_val = 1.5
+                spread_val = 1.5  # 美棒標準讓分預設值 1.5 分
                 
                 if odds_list:
                     odds = odds_list[0]
                     ou = odds.get("overUnder", None)
-                    if ou: ou_val = float(ou)
-                    
-                    details = str(odds.get("details", ""))
-                    if details and details != "EVEN":
+                    if ou:
                         try:
-                            val = abs(float(details.split(" ")[-1]))
-                            if val <= 4.5:
-                                spread_val = val
+                            ou_float = float(ou)
+                            if 5.0 <= ou_float <= 20.0:
+                                ou_val = ou_float
                         except Exception:
                             pass
+                    
+                    parsed_spread = None
+                    raw_spread = odds.get("spread", None)
+                    if raw_spread is not None:
+                        try:
+                            s = abs(float(raw_spread))
+                            if 0.5 <= s <= 3.5:
+                                parsed_spread = s
+                        except Exception:
+                            pass
+                    
+                    if parsed_spread is None:
+                        details = str(odds.get("details", "")).strip()
+                        if details and details != "EVEN":
+                            try:
+                                val = abs(float(details.split(" ")[-1]))
+                                if 0.5 <= val <= 3.5:
+                                    parsed_spread = val
+                            except Exception:
+                                pass
+                    
+                    if parsed_spread is not None:
+                        spread_val = parsed_spread
+                    else:
+                        spread_val = 1.5
                 
                 h_name, a_name = "", ""
                 for c in comp.get("competitors", []):
@@ -842,7 +852,14 @@ class AutomatedMLBQuantSystem:
             
             game_odds = espn_odds.get((row["away_team"], row["home_team"]), {})
             game_market_line = game_odds.get('ou')
-            live_spread = game_odds.get('spread', 1.5)
+            raw_spread = game_odds.get('spread', 1.5)
+            
+            try:
+                live_spread = float(raw_spread)
+                if live_spread < 0.5 or live_spread > 3.5:
+                    live_spread = 1.5
+            except Exception:
+                live_spread = 1.5
             
             if not game_market_line:
                 est_tot = lambda_away + lambda_home
@@ -861,24 +878,24 @@ class AutomatedMLBQuantSystem:
             
             run_diff = home_runs - away_runs 
             
-            # 讓分盤對齊 (加權分析後的強隊為讓分方)
+            # 讓分盤對齊：模型判定強隊為讓分方
             if home_ml_prob >= 0.5:
                 h_cov_prob = np.mean(run_diff > live_spread)
                 a_cov_prob = np.mean(run_diff < live_spread)
                 if h_cov_prob >= a_cov_prob:
-                    spread_pick = f"{home_cn} 讓-{live_spread} ({h_cov_prob*100:.1f}%)"
+                    spread_pick = f"{home_cn} 讓-{live_spread:g} ({h_cov_prob*100:.1f}%)"
                     spread_target = ("HOME_FAV", live_spread)
                 else:
-                    spread_pick = f"{away_cn} 受+{live_spread} ({a_cov_prob*100:.1f}%)"
+                    spread_pick = f"{away_cn} 受+{live_spread:g} ({a_cov_prob*100:.1f}%)"
                     spread_target = ("AWAY_DOG", live_spread)
             else:
                 a_cov_prob = np.mean(run_diff < -live_spread)
                 h_cov_prob = np.mean(run_diff > -live_spread)
                 if a_cov_prob >= h_cov_prob:
-                    spread_pick = f"{away_cn} 讓-{live_spread} ({a_cov_prob*100:.1f}%)"
+                    spread_pick = f"{away_cn} 讓-{live_spread:g} ({a_cov_prob*100:.1f}%)"
                     spread_target = ("AWAY_FAV", live_spread)
                 else:
-                    spread_pick = f"{home_cn} 受+{live_spread} ({h_cov_prob*100:.1f}%)"
+                    spread_pick = f"{home_cn} 受+{live_spread:g} ({h_cov_prob*100:.1f}%)"
                     spread_target = ("HOME_DOG", live_spread)
 
             total_runs = home_runs + away_runs
@@ -889,7 +906,7 @@ class AutomatedMLBQuantSystem:
             model_ou_pick = "大分" if over_prob >= under_prob else "小分"
             
             ml_text = f"{model_ml_pick_name} ({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
-            ou_text = f"{model_ou_pick} {game_market_line} ({max(over_prob, under_prob)*100:.1f}%)"
+            ou_text = f"{model_ou_pick} {game_market_line:g} ({max(over_prob, under_prob)*100:.1f}%)"
             
             ml_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600;"
             spread_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600;"
@@ -904,7 +921,6 @@ class AutomatedMLBQuantSystem:
                 
                 ml_style += "background-color: #dcfce7; color: #15803d;" if model_ml_pick_name == actual_ml_winner_name else "background-color: #fee2e2; color: #b91c1c;"
                     
-                # 讓球回測 (支援卡洞)
                 s_type, s_line = spread_target
                 if s_type == "HOME_FAV":
                     if actual_diff > s_line: spread_style += "background-color: #dcfce7; color: #15803d;"
@@ -923,7 +939,6 @@ class AutomatedMLBQuantSystem:
                     elif actual_diff == -s_line: spread_style += "background-color: #fef9c3; color: #854d0e;"
                     else: spread_style += "background-color: #fee2e2; color: #b91c1c;"
                     
-                # 大小分回測
                 if actual_total == game_market_line:
                     ou_style += "background-color: #fef9c3; color: #854d0e;"
                 elif (actual_total > game_market_line and model_ou_pick == "大分") or (actual_total < game_market_line and model_ou_pick == "小分"):
