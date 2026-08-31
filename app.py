@@ -316,48 +316,75 @@ def fetch_clubelo_cached(date_str: str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_soccer_matches_cached(date_str: str):
-    date_formatted = date_str.replace("-", "")
+    """跨時區 3 天容錯掃描，防止因為美國換日線而漏掉比賽"""
+    target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+    date_formatted = target_dt.strftime("%Y%m%d")
+    prev_d = (target_dt - timedelta(days=1)).strftime("%Y%m%d")
+    next_d = (target_dt + timedelta(days=1)).strftime("%Y%m%d")
+    range_formatted = f"{prev_d}-{next_d}"
+    
     all_matches = {}
     session = requests.Session()
     session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+    
     for league_name, league_slug in SOCCER_LEAGUES.items():
+        events = []
+        # 優先查詢當日
         url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={date_formatted}"
-        matches = []
         try:
-            res = session.get(url, timeout=6).json()
-            for event in res.get("events", []):
-                comp = event.get("competitions", [{}])[0]
-                status_obj = comp.get("status", {}).get("type", {})
-                api_state = status_obj.get("state", "pre")
-                is_completed = status_obj.get("completed", False) or api_state == "post"
-                
-                h_team, a_team = "TBD", "TBD"
-                h_score, a_score = None, None
-                for c in comp.get("competitors", []):
-                    t = c.get("team", {}).get("name", "")
-                    if c.get("homeAway") == "home":
-                        h_team = t
-                        if is_completed or api_state in ['in', 'post']: h_score = c.get("score")
-                    else:
-                        a_team = t
-                        if is_completed or api_state in ['in', 'post']: a_score = c.get("score")
-                        
-                act_str = f"{h_score}:{a_score}" if h_score is not None else "未完賽"
-                
-                # 抓取 API 實時盤口
-                api_ou = None
-                odds_list = comp.get("odds", [])
-                if odds_list:
-                    raw_ou = odds_list[0].get("overUnder", None)
-                    if raw_ou is not None and float(raw_ou) > 0:
-                        api_ou = float(raw_ou)
-                
-                # SQLite 鎖死機制：防範走地污染
-                final_ou_line = sync_soccer_odds(date_str, league_slug, h_team, a_team, api_state, api_ou)
-                        
-                matches.append({"home": h_team, "away": a_team, "score": act_str, "league": league_slug, "ou_line": final_ou_line})
+            res = session.get(url, timeout=5).json()
+            events = res.get("events", [])
         except Exception:
             pass
+            
+        # 啟動 3 天容錯掃描
+        if not events:
+            url_range = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={range_formatted}"
+            try:
+                res_range = session.get(url_range, timeout=5).json()
+                raw_events = res_range.get("events", [])
+                for ev in raw_events:
+                    ev_date = ev.get("date", "")
+                    if date_str in ev_date or date_formatted in ev_date.replace("-", ""):
+                        events.append(ev)
+                if not events and raw_events:
+                    events = raw_events
+            except Exception:
+                pass
+
+        matches = []
+        for event in events:
+            comp = event.get("competitions", [{}])[0]
+            status_obj = comp.get("status", {}).get("type", {})
+            api_state = status_obj.get("state", "pre")
+            is_completed = status_obj.get("completed", False) or api_state == "post"
+            
+            h_team, a_team = "TBD", "TBD"
+            h_score, a_score = None, None
+            for c in comp.get("competitors", []):
+                t = c.get("team", {}).get("name", "")
+                if c.get("homeAway") == "home":
+                    h_team = t
+                    if is_completed or api_state in ['in', 'post']: h_score = c.get("score")
+                else:
+                    a_team = t
+                    if is_completed or api_state in ['in', 'post']: a_score = c.get("score")
+                    
+            act_str = f"{h_score}:{a_score}" if h_score is not None else "未完賽"
+            
+            # 抓取 API 實時盤口
+            api_ou = None
+            odds_list = comp.get("odds", [])
+            if odds_list:
+                raw_ou = odds_list[0].get("overUnder", None)
+                if raw_ou is not None and float(raw_ou) > 0:
+                    api_ou = float(raw_ou)
+            
+            # SQLite 鎖死機制
+            final_ou_line = sync_soccer_odds(date_str, league_slug, h_team, a_team, api_state, api_ou)
+                    
+            matches.append({"home": h_team, "away": a_team, "score": act_str, "league": league_slug, "ou_line": final_ou_line})
+            
         if matches:
             all_matches[league_name] = matches
     return all_matches
@@ -739,13 +766,15 @@ class AutomatedMLBQuantSystem:
         return data
 
     def fetch_espn_mlb_odds(self, date_str: str):
-        date_formatted = date_str.replace("-", "")
-        url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_formatted}"
+        target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+        date_formatted = target_dt.strftime("%Y%m%d")
+        range_formatted = f"{(target_dt - timedelta(days=1)).strftime('%Y%m%d')}-{(target_dt + timedelta(days=1)).strftime('%Y%m%d')}"
+        
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         odds_dict = {}
-        try:
-            res = requests.get(url, headers=headers, timeout=6).json()
-            for event in res.get("events", []):
+        
+        def parse_odds(res_json):
+            for event in res_json.get("events", []):
                 comp = event.get("competitions", [{}])[0]
                 odds_list = comp.get("odds", [])
                 if odds_list:
@@ -759,21 +788,40 @@ class AutomatedMLBQuantSystem:
                                 a_name = c.get("team", {}).get("displayName", "")
                         if h_name and a_name:
                             odds_dict[(a_name, h_name)] = float(ou)
+
+        url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_formatted}"
+        try:
+            res = requests.get(url, headers=headers, timeout=5).json()
+            parse_odds(res)
+            if not odds_dict:
+                url_range = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={range_formatted}"
+                res_range = requests.get(url_range, headers=headers, timeout=5).json()
+                parse_odds(res_range)
         except Exception:
             pass
         return odds_dict
 
     def get_games_and_scores(self, date_str: str):
+        target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+        range_start = (target_dt - timedelta(days=1)).strftime('%Y-%m-%d')
+        range_end = (target_dt + timedelta(days=1)).strftime('%Y-%m-%d')
+        
         url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}&hydrate=probablePitcher,linescore,officials"
         try:
             res = requests.get(url, timeout=5).json()
+            if not res.get("dates"):
+                url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={range_start}&endDate={range_end}&hydrate=probablePitcher,linescore,officials"
+                res = requests.get(url, timeout=5).json()
         except Exception:
             return pd.DataFrame()
         
         games = []
         for d in res.get("dates", []):
+            if date_str not in d.get("date", ""):
+                pass
             for game in d.get("games", []):
                 status = game.get("status", {}).get("abstractGameState", "Preview")
+                api_state = "pre" if status in ["Preview", "Pre-Game"] else ("Final" if status == "Final" else "Live")
                 away_score = game["teams"]["away"].get("score", None)
                 home_score = game["teams"]["home"].get("score", None)
                 
@@ -793,7 +841,7 @@ class AutomatedMLBQuantSystem:
                 games.append({
                     "away_team": away_team, "away_sp": away_sp_info.get("fullName", "TBD"), "away_sp_id": away_sp_info.get("id", None),
                     "home_team": home_team, "home_sp": home_sp_info.get("fullName", "TBD"), "home_sp_id": home_sp_info.get("id", None),
-                    "status": status, "away_score": away_score, "home_score": home_score, "umpire": umpire_name
+                    "status": status, "api_state": api_state, "away_score": away_score, "home_score": home_score, "umpire": umpire_name
                 })
         return pd.DataFrame(games)
 
@@ -833,10 +881,10 @@ class AutomatedMLBQuantSystem:
             lambda_home = pitching_base_away * firepower_home * park_factor * weather_multiplier * ump_factor * hfa * unearned_run_multiplier
             lambda_away = pitching_base_home * firepower_away * park_factor * weather_multiplier * ump_factor * unearned_run_multiplier
             
-            api_state = row["status"]
+            api_state = row["api_state"]
             api_ou = espn_odds.get((row["away_team"], row["home_team"]), None)
             
-            # SQLite 鎖死機制：防範走地污染
+            # SQLite 鎖死機制
             game_market_line = sync_mlb_odds(date_str, row["home_team"], row["away_team"], api_state, api_ou)
             
             # 無紀錄則推估基準並永久鎖定
@@ -888,9 +936,10 @@ class AutomatedMLBQuantSystem:
             ml_text = f"{model_ml_pick_name} ({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
             ou_text = f"{model_ou_pick} {game_market_line} ({max(over_prob, under_prob)*100:.1f}%)"
             
-            ml_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600;"
-            spread_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600;"
-            ou_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600;"
+            cell_base = "padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
+            ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
+            spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
+            ou_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             
             is_final = (row["status"] == "Final" and row["home_score"] is not None)
             if is_final:
@@ -1097,6 +1146,7 @@ def render_mlb_inplay_calculator():
     st.caption("結合 FanGraphs 權威 RE24 出局數得分期望矩陣與後援投手負二項分佈，秒算半局得分率與全場勝率。")
     
     mlb_sys = AutomatedMLBQuantSystem(simulations=10000)
+    
     mlb_dropdown_map = {f"【美棒】{v} ({k.split()[-1]})": k for k, v in mlb_sys.team_cn_names.items()}
     mlb_labels = list(mlb_dropdown_map.keys())
     
