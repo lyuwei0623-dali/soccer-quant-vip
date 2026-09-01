@@ -599,7 +599,7 @@ class AutomatedMLBQuantSystem:
             "Cleveland Guardians": "守護者", "Detroit Tigers": "老虎", "Kansas City Royals": "皇家",
             "Minnesota Twins": "雙城", "Houston Astros": "太空人", "Los Angeles Angels": "天使",
             "Oakland Athletics": "運動家", "Athletics": "運動家", "Seattle Mariners": "水手",
-            "Texas Rangers": "遊騎兵", "Atlanta Braves": "勇士", "Miami Marlins": "馬林வீன",
+            "Texas Rangers": "遊騎兵", "Atlanta Braves": "勇士", "Miami Marlins": "馬林魚",
             "New York Mets": "大都會", "Philadelphia Phillies": "費城人", "Washington Nationals": "國民",
             "Chicago Cubs": "小熊", "Cincinnati Reds": "紅人", "Milwaukee Brewers": "釀酒人",
             "Pittsburgh Pirates": "海盜", "St. Louis Cardinals": "紅雀", "Arizona Diamondbacks": "響尾蛇",
@@ -923,7 +923,7 @@ class AutomatedMLBQuantSystem:
             ml_text = f"{model_ml_pick_name} {ml_pick_type}<br>({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
             ou_text = f"{model_ou_pick} {game_market_line}<br>({max(over_prob, under_prob)*100:.1f}%)"
             
-            # 【視覺優化】大幅縮小 Padding，壓縮行高，全域白底並智慧斷行
+            # 【手機版排版關鍵】使用 normal 與 line-height，完全不重疊且字體放大
             cell_base = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
@@ -962,7 +962,6 @@ class AutomatedMLBQuantSystem:
             bp_text_away = f"<span style='font-size:12.5px; color: #0f172a;'>{away_data['fatigue_desc']}</span>"
             bp_text_home = f"<span style='font-size:12.5px; color: #0f172a;'>{home_data['fatigue_desc']}</span>"
 
-            # 【視覺優化】字體全面放大 2px~3px
             row_html = f'''<tr>
                 <td style="{cell_base} font-weight: bold; font-size: 15px; color: #0f172a;">
                     <span style="color:#64748b; font-size:12px;">(客)</span> {away_cn}<br>
@@ -980,7 +979,7 @@ class AutomatedMLBQuantSystem:
             </tr>'''
             rows_html.append(row_html)
             
-        t_block = f'''
+        table_html = f'''
         <div style="margin-bottom: 20px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
             <div style="background: linear-gradient(90deg, #1e3a8a, #0369a1); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 14px; font-weight: bold;">
                 ⚾ 美國職棒大聯盟 (Major League Baseball)
