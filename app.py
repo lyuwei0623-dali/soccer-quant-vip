@@ -357,42 +357,69 @@ def fetch_clubelo_cached(date_str: str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_soccer_matches_cached(date_str: str):
-    date_formatted = date_str.replace("-", "")
+    target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+    date_formatted = target_dt.strftime("%Y%m%d")
+    range_formatted = f"{(target_dt - timedelta(days=1)).strftime('%Y%m%d')}-{(target_dt + timedelta(days=1)).strftime('%Y%m%d')}"
+    
     all_matches = {}
     session = requests.Session()
+    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
     for league_name, league_slug in SOCCER_LEAGUES.items():
+        events = []
         url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={date_formatted}"
-        matches = []
         try:
-            res = session.get(url, timeout=3).json()
-            for event in res.get("events", []):
-                comp = event.get("competitions", [{}])[0]
-                is_completed = comp.get("status", {}).get("type", {}).get("completed", False)
-                h_team, a_team = "TBD", "TBD"
-                h_score, a_score = None, None
-                for c in comp.get("competitors", []):
-                    t = c.get("team", {}).get("name", "")
-                    if c.get("homeAway") == "home":
-                        h_team = t
-                        if is_completed: h_score = c.get("score")
-                    else:
-                        a_team = t
-                        if is_completed: a_score = c.get("score")
-                act_str = f"{h_score} : {a_score}" if is_completed and h_score is not None else "未完賽"
-                
-                ou_line = 2.5
-                odds_list = comp.get("odds", [])
-                if odds_list:
-                    try:
-                        raw_ou = odds_list[0].get("overUnder", None)
-                        if raw_ou is not None and float(raw_ou) > 0:
-                            ou_line = float(raw_ou)
-                    except Exception:
-                        ou_line = 2.5
-                        
-                matches.append({"home": h_team, "away": a_team, "score": act_str, "league": league_slug, "ou_line": ou_line})
+            res = session.get(url, timeout=4).json()
+            events = res.get("events", [])
         except Exception:
             pass
+            
+        if not events:
+            url_range = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={range_formatted}"
+            try:
+                res_range = session.get(url_range, timeout=4).json()
+                raw_events = res_range.get("events", [])
+                for ev in raw_events:
+                    ev_date = ev.get("date", "")
+                    if date_str in ev_date or date_formatted in ev_date.replace("-", ""):
+                        events.append(ev)
+                if not events and raw_events:
+                    events = raw_events
+            except Exception:
+                pass
+
+        matches = []
+        for event in events:
+            comp = event.get("competitions", [{}])[0]
+            status_obj = comp.get("status", {}).get("type", {})
+            api_state = status_obj.get("state", "pre")
+            is_completed = status_obj.get("completed", False) or api_state == "post"
+            
+            h_team, a_team = "TBD", "TBD"
+            h_score, a_score = None, None
+            for c in comp.get("competitors", []):
+                t = c.get("team", {}).get("name", "")
+                if c.get("homeAway") == "home":
+                    h_team = t
+                    if is_completed or api_state in ['in', 'post']: h_score = c.get("score")
+                else:
+                    a_team = t
+                    if is_completed or api_state in ['in', 'post']: a_score = c.get("score")
+                    
+            act_str = f"{h_score}:{a_score}" if h_score is not None else "未完賽"
+            
+            api_ou = None
+            odds_list = comp.get("odds", [])
+            if odds_list:
+                try:
+                    raw_ou = odds_list[0].get("overUnder", None)
+                    if raw_ou is not None and float(raw_ou) > 0:
+                        api_ou = float(raw_ou)
+                except Exception:
+                    pass
+            
+            final_ou_line = sync_soccer_odds(date_str, league_slug, h_team, a_team, api_state, api_ou)
+            matches.append({"home": h_team, "away": a_team, "score": act_str, "league": league_slug, "ou_line": final_ou_line})
+            
         if matches:
             all_matches[league_name] = matches
     return all_matches
@@ -417,20 +444,26 @@ def generate_soccer_report_cached(date_str: str):
             lh = max(0.4, bg["home"] * (1.0 + diff / 550.0) * 1.15)
             la = max(0.3, bg["away"] * (1.0 - diff / 550.0))
             
-            # 10,000 次蒙地卡羅
             hg = np.random.poisson(lh, 10000)
             ag = np.random.poisson(la, 10000)
             hw_p = np.mean(hg > ag)
             dr_p = np.mean(hg == ag)
             aw_p = np.mean(hg < ag)
             
-            # 對齊當場實開的大小盤口
-            live_ou = m.get("ou_line", 2.5)
+            live_ou = m.get("ou_line")
+            if not live_ou:
+                exp_tot = lh + la
+                if exp_tot >= 3.6: live_ou = 3.5
+                elif exp_tot >= 3.1: live_ou = 3.0
+                elif exp_tot <= 2.2: live_ou = 2.0
+                else: live_ou = 2.5
+                force_update_soccer_fallback(date_str, m["league"], m["home"], m["away"], live_ou)
+                
             ov_p = np.mean((hg + ag) > live_ou)
             un_p = np.mean((hg + ag) < live_ou)
             btts_p = np.mean((hg > 0) & (ag > 0))
             
-            # 1. 獨贏判定 (1X2) - 改用 <br> 智慧斷行
+            # 手機排版關鍵：加入 <br> 斷行
             max_1x2 = max(hw_p, dr_p, aw_p)
             if max_1x2 == hw_p:
                 p_1x2, target_1x2 = f"{h_cn} 主勝<br>({hw_p*100:.1f}%)", "HOME"
@@ -439,7 +472,6 @@ def generate_soccer_report_cached(date_str: str):
             else:
                 p_1x2, target_1x2 = f"平局<br>({dr_p*100:.1f}%)", "DRAW"
 
-            # 2. 讓球正規判定
             g_diff = hg - ag 
             if hw_p >= aw_p:
                 h_cov_1 = np.mean(g_diff > 1)
@@ -466,7 +498,6 @@ def generate_soccer_report_cached(date_str: str):
                     spread_p = f"{h_cn} 受+0.5<br>({h_cov_half*100:.1f}%)"
                     spread_target = "HOME_P05"
 
-            # 3. 大小分
             if ov_p >= un_p:
                 p_ou, model_ou_target = f"大 {live_ou}<br>({ov_p*100:.1f}%)", "OVER"
             else:
@@ -474,8 +505,8 @@ def generate_soccer_report_cached(date_str: str):
 
             p_btts = f"是<br>({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否<br>({(1-btts_p)*100:.1f}%)"
             
-            # 手機版關鍵修正：移除 nowrap，加入 normal 與 line-height
-            cell_base = "padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.5; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
+            # 手機版排版關鍵 CSS：移除強制不換行，改用 normal 搭配水平滾動
+            cell_base = "padding: 10px 6px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap; line-height: 1.5; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
             
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
@@ -529,33 +560,24 @@ def generate_soccer_report_cached(date_str: str):
             </tr>'''
             rows.append(row_html)
             
+        # 移除固定寬度限制，讓表格在手機上自然滑動
         t_block = f'''
         <div style="margin-bottom: 22px; width: 100%; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
             <div style="background: linear-gradient(90deg, #0f172a, #334155); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 13.5px; font-weight: bold; display: flex; align-items: center;">
                 {l_name}
             </div>
             <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;">
-                <table style="width: 100%; min-width: 900px; table-layout: fixed; border-collapse: collapse; font-size: 12px; background-color: #ffffff;">
-                    <colgroup>
-                        <col style="width: 16%;">
-                        <col style="width: 10%;">
-                        <col style="width: 12%;">
-                        <col style="width: 10%;">
-                        <col style="width: 13%;">
-                        <col style="width: 14%;">
-                        <col style="width: 13%;">
-                        <col style="width: 12%;">
-                    </colgroup>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; background-color: #ffffff; white-space: nowrap;">
                     <thead>
                         <tr style="background-color: #f1f5f9; color: #0f172a; font-weight: 700; height: 38px;">
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">對戰組合</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">ClubElo</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">預估 xG</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">真實比分</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">獨贏推薦</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">讓球推薦</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">大小推薦 (開盤)</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">雙進</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">對戰組合</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">ClubElo</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">預估 xG</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">真實比分</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">獨贏推薦</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">讓球推薦</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">大小推薦 (開盤)</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">雙進</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -767,12 +789,15 @@ class AutomatedMLBQuantSystem:
         return data
 
     def fetch_espn_mlb_odds(self, date_str: str):
-        date_formatted = date_str.replace("-", "")
-        url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_formatted}"
+        target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+        date_formatted = target_dt.strftime("%Y%m%d")
+        range_formatted = f"{(target_dt - timedelta(days=1)).strftime('%Y%m%d')}-{(target_dt + timedelta(days=1)).strftime('%Y%m%d')}"
+        
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         odds_dict = {}
-        try:
-            res = requests.get(url, timeout=3).json()
-            for event in res.get("events", []):
+        
+        def parse_odds(res_json):
+            for event in res_json.get("events", []):
                 comp = event.get("competitions", [{}])[0]
                 odds_list = comp.get("odds", [])
                 if odds_list:
@@ -786,21 +811,40 @@ class AutomatedMLBQuantSystem:
                                 a_name = c.get("team", {}).get("displayName", "")
                         if h_name and a_name:
                             odds_dict[(a_name, h_name)] = float(ou)
+
+        url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_formatted}"
+        try:
+            res = requests.get(url, headers=headers, timeout=5).json()
+            parse_odds(res)
+            if not odds_dict:
+                url_range = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={range_formatted}"
+                res_range = requests.get(url_range, headers=headers, timeout=5).json()
+                parse_odds(res_range)
         except Exception:
             pass
         return odds_dict
 
     def get_games_and_scores(self, date_str: str):
+        target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+        range_start = (target_dt - timedelta(days=1)).strftime('%Y-%m-%d')
+        range_end = (target_dt + timedelta(days=1)).strftime('%Y-%m-%d')
+        
         url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}&hydrate=probablePitcher,linescore,officials"
         try:
             res = requests.get(url, timeout=5).json()
+            if not res.get("dates"):
+                url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={range_start}&endDate={range_end}&hydrate=probablePitcher,linescore,officials"
+                res = requests.get(url, timeout=5).json()
         except Exception:
             return pd.DataFrame()
         
         games = []
         for d in res.get("dates", []):
+            if date_str not in d.get("date", ""):
+                pass
             for game in d.get("games", []):
                 status = game.get("status", {}).get("abstractGameState", "Preview")
+                api_state = "pre" if status in ["Preview", "Pre-Game"] else ("Final" if status == "Final" else "Live")
                 away_score = game["teams"]["away"].get("score", None)
                 home_score = game["teams"]["home"].get("score", None)
                 
@@ -820,7 +864,7 @@ class AutomatedMLBQuantSystem:
                 games.append({
                     "away_team": away_team, "away_sp": away_sp_info.get("fullName", "TBD"), "away_sp_id": away_sp_info.get("id", None),
                     "home_team": home_team, "home_sp": home_sp_info.get("fullName", "TBD"), "home_sp_id": home_sp_info.get("id", None),
-                    "status": status, "away_score": away_score, "home_score": home_score, "umpire": umpire_name
+                    "status": status, "api_state": api_state, "away_score": away_score, "home_score": home_score, "umpire": umpire_name
                 })
         return pd.DataFrame(games)
 
@@ -860,12 +904,18 @@ class AutomatedMLBQuantSystem:
             lambda_home = pitching_base_away * firepower_home * park_factor * weather_multiplier * ump_factor * hfa * unearned_run_multiplier
             lambda_away = pitching_base_home * firepower_away * park_factor * weather_multiplier * ump_factor * unearned_run_multiplier
             
-            game_market_line = espn_odds.get((row["away_team"], row["home_team"]), None)
+            api_state = row["api_state"]
+            api_ou = espn_odds.get((row["away_team"], row["home_team"]), None)
+            
+            # SQLite 鎖死機制
+            game_market_line = sync_mlb_odds(date_str, row["home_team"], row["away_team"], api_state, api_ou)
+            
             if not game_market_line:
                 est_tot = lambda_away + lambda_home
                 game_market_line = round(est_tot * 2) / 2.0
                 if game_market_line < 6.5: game_market_line = 7.5
                 if game_market_line > 12.5: game_market_line = 11.5
+                force_update_mlb_fallback(date_str, row["home_team"], row["away_team"], game_market_line)
 
             home_runs = self.generate_negative_binomial_runs(lambda_home, self.simulations)
             away_runs = self.generate_negative_binomial_runs(lambda_away, self.simulations)
@@ -877,25 +927,25 @@ class AutomatedMLBQuantSystem:
             away_ml_prob = 1.0 - home_ml_prob
             
             run_diff = home_runs - away_runs 
-            home_cover_minus1 = np.mean(run_diff > 1.5)      
-            away_cover_plus1 = np.mean(run_diff < 1.5)       
-            away_cover_minus1 = np.mean(run_diff < -1.5)     
-            home_cover_plus1 = np.mean(run_diff > -1.5)      
+            home_cover_m15 = np.mean(run_diff > 1.5)      
+            away_cover_p15 = np.mean(run_diff < 1.5)       
+            away_cover_m15 = np.mean(run_diff < -1.5)     
+            home_cover_p15 = np.mean(run_diff > -1.5)      
             
-            # 手機版排版：加入 <br> 智慧斷行
+            # 手機版排版關鍵：強制加入 <br> 斷行
             if home_ml_prob >= 0.5:
-                if home_cover_minus1 >= 0.40:
-                    spread_pick = f"{home_cn} 讓-1.5<br>({home_cover_minus1*100:.1f}%)"
+                if home_cover_m15 >= 0.40:
+                    spread_pick = f"{home_cn} 讓-1.5<br>({home_cover_m15*100:.1f}%)"
                     spread_target = "HOME_M15"
                 else:
-                    spread_pick = f"{away_cn} 受+1.5<br>({away_cover_plus1*100:.1f}%)"
+                    spread_pick = f"{away_cn} 受+1.5<br>({away_cover_p15*100:.1f}%)"
                     spread_target = "AWAY_P15"
             else:
-                if away_cover_minus1 >= 0.40:
-                    spread_pick = f"{away_cn} 讓-1.5<br>({away_cover_minus1*100:.1f}%)"
+                if away_cover_m15 >= 0.40:
+                    spread_pick = f"{away_cn} 讓-1.5<br>({away_cover_m15*100:.1f}%)"
                     spread_target = "AWAY_M15"
                 else:
-                    spread_pick = f"{home_cn} 受+1.5<br>({home_cover_plus1*100:.1f}%)"
+                    spread_pick = f"{home_cn} 受+1.5<br>({home_cover_p15*100:.1f}%)"
                     spread_target = "HOME_P15"
 
             total_runs = home_runs + away_runs
@@ -905,11 +955,11 @@ class AutomatedMLBQuantSystem:
             model_ml_pick_name = home_cn if home_ml_prob >= 0.5 else away_cn
             model_ou_pick = "大分" if over_prob >= under_prob else "小分"
             
-            ml_text = f"{model_ml_pick_name}<br>({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
+            ml_text = f"{model_ml_pick_name} 主勝<br>({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
             ou_text = f"{model_ou_pick} {game_market_line}<br>({max(over_prob, under_prob)*100:.1f}%)"
             
-            # 關鍵修改：去除 nowrap，改用 normal 和 line-height 讓手機版自適應
-            cell_base = "padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.5; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
+            # 手機版排版關鍵 CSS：移除強制不換行，改用 normal 搭配水平滾動
+            cell_base = "padding: 10px 6px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap; line-height: 1.5; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             ou_style = f"{cell_base} color: #0f172a; font-weight: 600;"
@@ -961,37 +1011,26 @@ class AutomatedMLBQuantSystem:
             </tr>'''
             rows_html.append(row_html)
             
-        t_block = f'''
+        # 移除固定寬度限制，讓表格在手機上自然滑動
+        table_html = f'''
         <div style="margin-bottom: 20px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
             <div style="background: linear-gradient(90deg, #1e3a8a, #0369a1); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 13.5px; font-weight: bold;">
                 ⚾ 美國職棒大聯盟 (Major League Baseball)
             </div>
             <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;">
-                <table style="width: 100%; min-width: 1050px; table-layout: fixed; border-collapse: collapse; font-size: 12px; background-color: #ffffff;">
-                    <colgroup>
-                        <col style="width: 14%;">
-                        <col style="width: 13%;">
-                        <col style="width: 12%;">
-                        <col style="width: 7%;">
-                        <col style="width: 8%;">
-                        <col style="width: 9%;">
-                        <col style="width: 7%;">
-                        <col style="width: 9%;">
-                        <col style="width: 11%;">
-                        <col style="width: 10%;">
-                    </colgroup>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; background-color: #ffffff; white-space: nowrap;">
                     <thead>
                         <tr style="background-color: #f1f5f9; text-align: center; color: #0f172a; font-weight: bold; height: 38px;">
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">對戰組合</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">先發 & 慣用手</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">昨日牛棚狀態</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">本壘板主審</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">天氣與風向</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">預估分(客:主)</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">真實比分</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">獨贏推薦</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">讓分推薦 (±1.5)</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">大小推薦 (開盤)</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">對戰組合</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">先發 & 慣用手</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">昨日牛棚狀態</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">本壘板主審</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">天氣與風向</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">預估分(客:主)</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">真實比分</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">獨贏推薦</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">讓分推薦 (±1.5)</th>
+                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">大小推薦 (開盤)</th>
                         </tr>
                     </thead>
                     <tbody>
