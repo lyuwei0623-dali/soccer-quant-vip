@@ -7,6 +7,7 @@ import io
 import time
 import os
 import base64
+import sqlite3
 from datetime import datetime, date, timedelta
 
 # 1. 頁面設定（支援手機響應式寬度）
@@ -27,13 +28,72 @@ WATERMARK_TEXT = "維大力 官方正版認證" # 背景防偽浮水印文字
 MASTER_PASSCODE = "ADMIN999"      # 管理員萬能通行碼
 SECRET_SALT = "MySecretKey2026"  # 專屬私鑰 (防偽簽名)
 
-# 2. 全局雲端裝置綁定資料庫 (0 延遲記憶體快取)
+# ================= 尾盤自動封存資料庫 (SQLite) =================
+DB_FILE = "closing_odds.db"
+
+def init_db():
+    with sqlite3.connect(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS soccer_odds (
+                        date_str TEXT, home TEXT, away TEXT,
+                        ou_line REAL, is_locked INTEGER,
+                        UNIQUE(date_str, home, away))''')
+        c.execute('''CREATE TABLE IF NOT EXISTS mlb_odds (
+                        date_str TEXT, home TEXT, away TEXT,
+                        ou_line REAL, is_locked INTEGER,
+                        UNIQUE(date_str, home, away))''')
+        conn.commit()
+
+init_db()
+
+def get_db_ou(sport, date_str, home, away):
+    table = "soccer_odds" if sport == "soccer" else "mlb_odds"
+    with sqlite3.connect(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute(f"SELECT ou_line, is_locked FROM {table} WHERE date_str=? AND home=? AND away=?", (date_str, home, away))
+        row = c.fetchone()
+        return (row[0], row[1]) if row else (None, 0)
+
+def save_db_ou(sport, date_str, home, away, ou_line, is_locked):
+    table = "soccer_odds" if sport == "soccer" else "mlb_odds"
+    with sqlite3.connect(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute(f"""
+            INSERT INTO {table} (date_str, home, away, ou_line, is_locked)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(date_str, home, away) DO UPDATE SET
+                ou_line=excluded.ou_line,
+                is_locked=excluded.is_locked
+            WHERE is_locked = 0
+        """, (date_str, home, away, ou_line, int(is_locked)))
+        conn.commit()
+
+def sync_odds(sport, date_str, home, away, api_state, api_ou):
+    db_ou, is_locked = get_db_ou(sport, date_str, home, away)
+    is_completed = (api_state in ['in', 'post', 'Live', 'Final'])
+    
+    if db_ou and is_locked:
+        return db_ou
+        
+    if api_ou:
+        save_db_ou(sport, date_str, home, away, api_ou, is_completed)
+        return api_ou
+        
+    if db_ou:
+        save_db_ou(sport, date_str, home, away, db_ou, True)
+        return db_ou
+        
+    return None
+
+def force_update_fallback(sport, date_str, home, away, calc_ou):
+    save_db_ou(sport, date_str, home, away, calc_ou, 1)
+
+# 2. 全局雲端裝置綁定資料庫
 @st.cache_resource
 def get_device_registry():
     return {}
 
 def get_client_fingerprint():
-    """獲取客戶端裝置指紋 (防止跨裝置轉發)"""
     try:
         ua = st.context.headers.get("User-Agent", "default_ua")
         return hashlib.md5(ua.encode()).hexdigest()[:10]
@@ -41,7 +101,6 @@ def get_client_fingerprint():
         return "device_default"
 
 def generate_vip_token(user_name: str, issue_date: date = None) -> str:
-    """生成精簡版通行碼 (格式: 會員名_4碼簽名)"""
     if not issue_date:
         issue_date = date.today()
     user_clean = user_name.strip().replace(" ", "").upper()
@@ -50,7 +109,6 @@ def generate_vip_token(user_name: str, issue_date: date = None) -> str:
     return f"{user_clean}_{sig}"
 
 def parse_and_validate_token(token: str):
-    """智慧滾動驗證：自動比對過去 7 天簽名"""
     clean_token = token.strip().upper()
     if clean_token == MASTER_PASSCODE:
         return True, "管理員", date.today(), 999
@@ -75,11 +133,9 @@ def parse_and_validate_token(token: str):
             
     return False, None, None, 0
 
-# ================= 全局防偽浮水印與專屬 CSS =================
 def apply_branding_css():
     st.markdown(f"""
     <style>
-    /* 全局防偽半透明浮水印背景 */
     .stApp::before {{
         content: "{WATERMARK_TEXT}";
         position: fixed;
@@ -100,7 +156,6 @@ def apply_branding_css():
     """, unsafe_allow_html=True)
 
 def render_brand_header():
-    """渲染頂部官方正版識別橫幅 (支援 jpg/png/webp 自動 Base64 解析)"""
     logo_html = ""
     if CUSTOM_LOGO_URL:
         logo_html = f'<img src="{CUSTOM_LOGO_URL}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #f59e0b; margin-right: 12px; object-fit: cover;">'
@@ -116,7 +171,6 @@ def render_brand_header():
                     break
                 except Exception:
                     pass
-        
         if not logo_html:
             logo_html = '<div style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; margin-right: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);">🛡️</div>'
 
@@ -139,7 +193,6 @@ def render_brand_header():
     """
     st.markdown(header_html, unsafe_allow_html=True)
 
-# ================= 一機一碼核心驗證邏輯 =================
 registry = get_device_registry()
 url_vip = st.query_params.get("vip", "").strip().upper()
 dev_fp = get_client_fingerprint()
@@ -179,7 +232,7 @@ def try_authenticate(input_token: str):
     else:
         bound_dev = registry[clean].get("dev_id", "")
         if bound_dev and bound_dev != dev_fp and bound_dev != "device_default":
-            return False, "⛔ 訪問被拒：此 VIP 代碼已綁定其他手機，嚴禁轉傳！若更換手機請聯繫官方管理員解綁。"
+            return False, "⛔ 訪問被拒：此 VIP 代碼已綁定其他手機，嚴禁轉傳！"
             
     st.session_state["authenticated"] = True
     st.session_state["is_admin"] = False
@@ -196,39 +249,31 @@ if not st.session_state["authenticated"] and url_vip:
 
 # ================= 模組一：歐洲足球量化與實時開盤對齊引擎 =================
 BASE_SOCCER_ELO = {
-    # 西甲
     "Real Madrid": 2010.0, "Barcelona": 1935.0, "Atletico Madrid": 1865.0, "Girona": 1785.0,
     "Athletic Club": 1805.0, "Athletic": 1805.0, "Real Sociedad": 1775.0, "Villarreal": 1775.0,
     "Real Betis": 1745.0, "Sevilla": 1710.0, "Celta Vigo": 1685.0, "Celta": 1685.0,
     "Osasuna": 1675.0, "Mallorca": 1680.0, "Valencia": 1690.0, "Rayo Vallecano": 1680.0,
     "Las Palmas": 1650.0, "Getafe": 1660.0, "Alaves": 1660.0, "Leganes": 1635.0,
     "Espanyol": 1655.0, "Valladolid": 1625.0,
-    # 英超
     "Manchester City": 2020.0, "Arsenal": 1985.0, "Liverpool": 1970.0, "Chelsea": 1835.0,
     "Tottenham": 1815.0, "Newcastle": 1815.0, "Aston Villa": 1835.0, "Manchester United": 1785.0,
     "Brighton": 1775.0, "West Ham": 1725.0, "Fulham": 1715.0, "Bournemouth": 1705.0,
     "Brentford": 1705.0, "Crystal Palace": 1715.0, "Wolves": 1685.0, "Everton": 1690.0,
     "Nottingham Forest": 1685.0, "Leicester": 1675.0, "Southampton": 1635.0, "Ipswich": 1615.0,
-    # 德甲
     "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0,
     "RB Leipzig": 1875.0, "Stuttgart": 1835.0, "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0,
     "Wolfsburg": 1725.0, "Mainz": 1705.0, "Augsburg": 1705.0, "Werder Bremen": 1715.0,
-    # 義甲
     "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0,
     "Milan": 1865.0, "AC Milan": 1865.0, "Roma": 1805.0, "Lazio": 1805.0, "Napoli": 1825.0,
     "Bologna": 1815.0, "Fiorentina": 1775.0, "Torino": 1755.0,
-    # 法甲
     "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0,
     "Lyon": 1775.0, "Nice": 1775.0, "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0
 }
 
 SOCCER_LEAGUES = {
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 英格蘭超級聯賽 (Premier League)": "eng.1",
-    "🇪🇸 西班牙甲級聯賽 (La Liga)": "esp.1",
-    "🇩🇪 德國甲級聯賽 (Bundesliga)": "ger.1",
-    "🇮🇹 義大利甲級聯賽 (Serie A)": "ita.1",
-    "🇫🇷 法國甲級聯賽 (Ligue 1)": "fra.1",
-    "🏆 歐洲冠軍聯賽 (UEFA Champions League)": "uefa.champions"
+    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 英格蘭超級聯賽 (Premier League)": "eng.1", "🇪🇸 西班牙甲級聯賽 (La Liga)": "esp.1",
+    "🇩🇪 德國甲級聯賽 (Bundesliga)": "ger.1", "🇮🇹 義大利甲級聯賽 (Serie A)": "ita.1",
+    "🇫🇷 法國甲級聯賽 (Ligue 1)": "fra.1", "🏆 歐洲冠軍聯賽 (UEFA Champions League)": "uefa.champions"
 }
 
 SOCCER_GOALS = {
@@ -238,67 +283,18 @@ SOCCER_GOALS = {
 }
 
 SOCCER_CN = {
-    # 英超
-    "Manchester City": "曼城", "Arsenal": "兵工廠", "Liverpool": "利物浦", "Chelsea": "切爾西",
-    "Tottenham Hotspur": "熱刺", "Tottenham": "熱刺", "Manchester United": "曼聯", "Newcastle United": "紐卡索聯",
-    "Newcastle": "紐卡索聯", "Aston Villa": "阿斯頓維拉", "Brighton & Hove Albion": "布萊頓", "Brighton": "布萊頓",
-    "West Ham United": "西漢姆聯", "West Ham": "西漢姆聯", "Fulham": "富勒姆", "Wolverhampton Wanderers": "狼隊",
-    "Wolves": "狼隊", "Everton": "艾佛頓", "Brentford": "布倫特福德", "Crystal Palace": "水晶宮",
-    "Bournemouth": "伯恩茅斯", "Nottingham Forest": "諾丁漢森林", "Leicester City": "萊斯特城",
-    "Leicester": "萊斯特城", "Ipswich Town": "伊普斯維奇", "Ipswich": "伊普斯維奇", "Southampton": "南安普敦",
-    # 西甲
-    "Real Madrid": "皇家馬德里", "Barcelona": "巴塞隆納", "Atlético Madrid": "馬德里競技", "Atletico Madrid": "馬德里競技",
-    "Girona": "赫羅納", "Athletic Club": "畢爾包競技", "Athletic": "畢爾包競技", "Real Sociedad": "皇家社會",
-    "Real Betis": "皇家貝提斯", "Villarreal": "比利亞雷亞爾", "Sevilla": "塞維亞", "Valencia": "瓦倫西亞",
-    "Osasuna": "奧薩蘇納", "Celta Vigo": "塞爾塔", "Celta de Vigo": "塞爾塔", "Celta": "塞爾塔",
-    "Mallorca": "馬約卡", "Rayo Vallecano": "巴列卡諾", "Las Palmas": "拉斯帕爾馬斯", "Getafe": "赫塔菲",
-    "Alavés": "阿拉維斯", "Alaves": "阿拉維斯", "Espanyol": "西班牙人", "Leganés": "萊加內斯",
-    "Leganes": "萊加內斯", "Real Valladolid": "瓦拉多利德", "Valladolid": "瓦拉多利德",
-    # 德甲
-    "Bayern Munich": "拜仁慕尼黑", "Bayer Leverkusen": "勒沃庫森", "Borussia Dortmund": "多特蒙德",
-    "RB Leipzig": "RB萊比錫", "Stuttgart": "斯圖加特", "Eintracht Frankfurt": "法蘭克福", "Freiburg": "弗萊堡",
-    "Wolfsburg": "狼堡", "Mainz": "梅因斯", "Augsburg": "奧格斯堡", "Werder Bremen": "雲達不萊梅",
-    # 義甲
-    "Inter": "國際米蘭", "Internazionale": "國際米蘭", "Inter Milan": "國際米蘭", "Atalanta": "亞特蘭大",
-    "Juventus": "尤文圖斯", "Milan": "AC米蘭", "AC Milan": "AC米蘭", "Roma": "羅馬", "Lazio": "拉齊奧",
-    "Napoli": "拿坡里", "Bologna": "波隆那", "Fiorentina": "佛倫提那", "Torino": "都靈",
-    # 法甲
-    "Paris Saint-Germain": "巴黎聖日耳曼", "Monaco": "摩納哥", "Lille": "里爾", "Marseille": "馬賽",
-    "Lyon": "里昂", "Nice": "尼斯", "Lens": "朗斯", "Brest": "布雷斯特", "Rennes": "雷恩"
+    "Manchester City": "曼城", "Arsenal": "兵工廠", "Liverpool": "利物浦", "Chelsea": "切爾西", "Tottenham Hotspur": "熱刺", "Tottenham": "熱刺", "Manchester United": "曼聯", "Newcastle United": "紐卡索聯", "Newcastle": "紐卡索聯", "Aston Villa": "阿斯頓維拉", "Brighton & Hove Albion": "布萊頓", "Brighton": "布萊頓", "West Ham United": "西漢姆聯", "West Ham": "西漢姆聯", "Fulham": "富勒姆", "Wolverhampton Wanderers": "狼隊", "Wolves": "狼隊", "Everton": "艾佛頓", "Brentford": "布倫特福德", "Crystal Palace": "水晶宮", "Bournemouth": "伯恩茅斯", "Nottingham Forest": "諾丁漢森林", "Leicester City": "萊斯特城", "Leicester": "萊斯特城", "Ipswich Town": "伊普斯維奇", "Ipswich": "伊普斯維奇", "Southampton": "南安普敦",
+    "Real Madrid": "皇家馬德里", "Barcelona": "巴塞隆納", "Atlético Madrid": "馬德里競技", "Atletico Madrid": "馬德里競技", "Girona": "赫羅納", "Athletic Club": "畢爾包競技", "Athletic": "畢爾包競技", "Real Sociedad": "皇家社會", "Real Betis": "皇家貝提斯", "Villarreal": "比利亞雷亞爾", "Sevilla": "塞維亞", "Valencia": "瓦倫西亞", "Osasuna": "奧薩蘇納", "Celta Vigo": "塞爾塔", "Celta de Vigo": "塞爾塔", "Celta": "塞爾塔", "Mallorca": "馬約卡", "Rayo Vallecano": "巴列卡諾", "Las Palmas": "拉斯帕爾馬斯", "Getafe": "赫塔菲", "Alavés": "阿拉維斯", "Alaves": "阿拉維斯", "Espanyol": "西班牙人", "Leganés": "萊加內斯", "Leganes": "萊加內斯", "Real Valladolid": "瓦拉多利德", "Valladolid": "瓦拉多利德",
+    "Bayern Munich": "拜仁慕尼黑", "Bayer Leverkusen": "勒沃庫森", "Borussia Dortmund": "多特蒙德", "RB Leipzig": "RB萊比錫", "Stuttgart": "斯圖加特", "Eintracht Frankfurt": "法蘭克福", "Freiburg": "弗萊堡", "Wolfsburg": "狼堡", "Mainz": "梅因斯", "Augsburg": "奧格斯堡", "Werder Bremen": "雲達不萊梅",
+    "Inter": "國際米蘭", "Internazionale": "國際米蘭", "Inter Milan": "國際米蘭", "Atalanta": "亞特蘭大", "Juventus": "尤文圖斯", "Milan": "AC米蘭", "AC Milan": "AC米蘭", "Roma": "羅馬", "Lazio": "拉齊奧", "Napoli": "拿坡里", "Bologna": "波隆那", "Fiorentina": "佛倫提那", "Torino": "都靈",
+    "Paris Saint-Germain": "巴黎聖日耳曼", "Monaco": "摩納哥", "Lille": "里爾", "Marseille": "馬賽", "Lyon": "里昂", "Nice": "尼斯", "Lens": "朗斯", "Brest": "布雷斯特", "Rennes": "雷恩"
 }
 
-SOCCER_INPLAY_DROPDOWN = {
-    # 英超
-    "【英超】兵工廠": "Arsenal", "【英超】曼城": "Manchester City", "【英超】利物浦": "Liverpool",
-    "【英超】切爾西": "Chelsea", "【英超】熱刺": "Tottenham", "【英超】曼聯": "Manchester United",
-    "【英超】阿斯頓維拉": "Aston Villa", "【英超】紐卡索聯": "Newcastle", "【英超】布萊頓": "Brighton",
-    "【英超】西漢姆聯": "West Ham", "【英超】富勒姆": "Fulham", "【英超】水晶宮": "Crystal Palace",
-    "【英超】伯恩茅斯": "Bournemouth", "【英超】布倫特福德": "Brentford", "【英超】艾佛頓": "Everton",
-    "【英超】狼隊": "Wolves", "【英超】諾丁漢森林": "Nottingham Forest", "【英超】萊斯特城": "Leicester",
-    "【英超】南安普敦": "Southampton", "【英超】伊普斯維奇": "Ipswich",
-    # 西甲
-    "【西甲】皇家馬德里": "Real Madrid", "【西甲】巴塞隆納": "Barcelona", "【西甲】馬德里競技": "Atletico Madrid",
-    "【西甲】赫羅納": "Girona", "【西甲】畢爾包競技": "Athletic Club", "【西甲】皇家社會": "Real Sociedad",
-    "【西甲】比利亞雷亞爾": "Villarreal", "【西甲】皇家貝提斯": "Real Betis", "【西甲】塞維亞": "Sevilla",
-    "【西甲】瓦倫西亞": "Valencia", "【西甲】奧薩蘇納": "Osasuna", "【西甲】塞爾塔": "Celta Vigo",
-    "【西甲】馬約卡": "Mallorca", "【西甲】巴列卡諾": "Rayo Vallecano", "【西甲】阿拉維斯": "Alaves",
-    "【西甲】赫塔菲": "Getafe", "【西甲】西班牙人": "Espanyol", "【西甲】拉斯帕爾馬斯": "Las Palmas",
-    "【西甲】萊加內斯": "Leganes", "【西甲】瓦拉多利德": "Valladolid",
-    # 德甲
-    "【德甲】拜仁慕尼黑": "Bayern Munich", "【德甲】勒沃庫森": "Bayer Leverkusen", "【德甲】多特蒙德": "Borussia Dortmund",
-    "【德甲】RB萊比錫": "RB Leipzig", "【德甲】斯圖加特": "Stuttgart", "【德甲】法蘭克福": "Eintracht Frankfurt",
-    "【德甲】弗萊堡": "Freiburg", "【德甲】狼堡": "Wolfsburg", "【德甲】梅因斯": "Mainz",
-    "【德甲】奧格斯堡": "Augsburg", "【德甲】雲達不萊梅": "Werder Bremen",
-    # 義甲
-    "【義甲】國際米蘭": "Inter", "【義甲】尤文圖斯": "Juventus", "【義甲】AC米蘭": "Milan",
-    "【義甲】亞特蘭大": "Atalanta", "【義甲】拿坡里": "Napoli", "【義甲】羅馬": "Roma",
-    "【義甲】拉齊奧": "Lazio", "【義甲】波隆那": "Bologna", "【義甲】佛倫提那": "Fiorentina",
-    "【義甲】都靈": "Torino",
-    # 法甲
-    "【法甲】巴黎聖日耳曼": "Paris Saint-Germain", "【法甲】摩納哥": "Monaco", "【法甲】里爾": "Lille",
-    "【法甲】馬賽": "Marseille", "【法甲】里昂": "Lyon", "【法甲】尼斯": "Nice",
-    "【法甲】朗斯": "Lens", "【法甲】布雷斯特": "Brest", "【法甲】雷恩": "Rennes"
-}
+SOCCER_INPLAY_DROPDOWN = {f"【足球】{v} ({k})": k for k, v in SOCCER_CN.items() if k in BASE_SOCCER_ELO}
+if "【足球】皇家馬德里 (Real Madrid)" not in SOCCER_INPLAY_DROPDOWN:
+    SOCCER_INPLAY_DROPDOWN["【足球】皇家馬德里 (Real Madrid)"] = "Real Madrid"
+if "【足球】巴塞隆納 (Barcelona)" not in SOCCER_INPLAY_DROPDOWN:
+    SOCCER_INPLAY_DROPDOWN["【足球】巴塞隆納 (Barcelona)"] = "Barcelona"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_clubelo_cached(date_str: str):
@@ -306,7 +302,7 @@ def fetch_clubelo_cached(date_str: str):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     for url in [f"http://api.clubelo.com/{date_str}", "http://api.clubelo.com/today"]:
         try:
-            res = requests.get(url, headers=headers, timeout=4)
+            res = requests.get(url, headers=headers, timeout=5)
             if res.status_code == 200 and "Elo" in res.text:
                 df = pd.read_csv(io.StringIO(res.text))
                 club_col = next((c for c in df.columns if str(c).strip().lower() in ['club', 'team']), None)
@@ -321,44 +317,69 @@ def fetch_clubelo_cached(date_str: str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_soccer_matches_cached(date_str: str):
-    """即時抓取比分 ＋ 自動同步 ESPN / DraftKings 實時開盤盤口"""
-    date_formatted = date_str.replace("-", "")
+    target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+    date_formatted = target_dt.strftime("%Y%m%d")
+    range_formatted = f"{(target_dt - timedelta(days=1)).strftime('%Y%m%d')}-{(target_dt + timedelta(days=1)).strftime('%Y%m%d')}"
+    
     all_matches = {}
     session = requests.Session()
+    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
     for league_name, league_slug in SOCCER_LEAGUES.items():
+        events = []
         url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={date_formatted}"
-        matches = []
         try:
-            res = session.get(url, timeout=3).json()
-            for event in res.get("events", []):
-                comp = event.get("competitions", [{}])[0]
-                is_completed = comp.get("status", {}).get("type", {}).get("completed", False)
-                h_team, a_team = "TBD", "TBD"
-                h_score, a_score = None, None
-                for c in comp.get("competitors", []):
-                    t = c.get("team", {}).get("name", "")
-                    if c.get("homeAway") == "home":
-                        h_team = t
-                        if is_completed: h_score = c.get("score")
-                    else:
-                        a_team = t
-                        if is_completed: a_score = c.get("score")
-                act_str = f"{h_score}:{a_score}" if is_completed and h_score is not None else "未完賽"
-                
-                # 自動抓取開盤大小分 (Over/Under Line)
-                ou_line = 2.5
-                odds_list = comp.get("odds", [])
-                if odds_list:
-                    try:
-                        raw_ou = odds_list[0].get("overUnder", None)
-                        if raw_ou is not None and float(raw_ou) > 0:
-                            ou_line = float(raw_ou)
-                    except Exception:
-                        ou_line = 2.5
-                        
-                matches.append({"home": h_team, "away": a_team, "score": act_str, "league": league_slug, "ou_line": ou_line})
+            res = session.get(url, timeout=5).json()
+            events = res.get("events", [])
         except Exception:
             pass
+            
+        if not events:
+            url_range = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={range_formatted}"
+            try:
+                res_range = session.get(url_range, timeout=5).json()
+                raw_events = res_range.get("events", [])
+                for ev in raw_events:
+                    ev_date = ev.get("date", "")
+                    if date_str in ev_date or date_formatted in ev_date.replace("-", ""):
+                        events.append(ev)
+                if not events and raw_events:
+                    events = raw_events
+            except Exception:
+                pass
+
+        matches = []
+        for event in events:
+            comp = event.get("competitions", [{}])[0]
+            status_obj = comp.get("status", {}).get("type", {})
+            api_state = status_obj.get("state", "pre")
+            is_completed = status_obj.get("completed", False) or api_state == "post"
+            
+            h_team, a_team = "TBD", "TBD"
+            h_score, a_score = None, None
+            for c in comp.get("competitors", []):
+                t = c.get("team", {}).get("name", "")
+                if c.get("homeAway") == "home":
+                    h_team = t
+                    if is_completed or api_state in ['in', 'post']: h_score = c.get("score")
+                else:
+                    a_team = t
+                    if is_completed or api_state in ['in', 'post']: a_score = c.get("score")
+                    
+            act_str = f"{h_score}:{a_score}" if h_score is not None else "未完賽"
+            
+            api_ou = None
+            odds_list = comp.get("odds", [])
+            if odds_list:
+                try:
+                    raw_ou = odds_list[0].get("overUnder", None)
+                    if raw_ou is not None and float(raw_ou) > 0:
+                        api_ou = float(raw_ou)
+                except Exception:
+                    pass
+            
+            final_ou_line = sync_odds("soccer", date_str, h_team, a_team, api_state, api_ou)
+            matches.append({"home": h_team, "away": a_team, "score": act_str, "league": league_slug, "ou_line": final_ou_line})
+            
         if matches:
             all_matches[league_name] = matches
     return all_matches
@@ -383,64 +404,68 @@ def generate_soccer_report_cached(date_str: str):
             lh = max(0.4, bg["home"] * (1.0 + diff / 550.0) * 1.15)
             la = max(0.3, bg["away"] * (1.0 - diff / 550.0))
             
-            # 10,000 次蒙地卡羅
             hg = np.random.poisson(lh, 10000)
             ag = np.random.poisson(la, 10000)
             hw_p = np.mean(hg > ag)
             dr_p = np.mean(hg == ag)
             aw_p = np.mean(hg < ag)
             
-            # 對齊當場實開的大小盤口
-            live_ou = m.get("ou_line", 2.5)
+            live_ou = m.get("ou_line")
+            if not live_ou:
+                exp_tot = lh + la
+                if exp_tot >= 3.6: live_ou = 3.5
+                elif exp_tot >= 3.1: live_ou = 3.0
+                elif exp_tot <= 2.2: live_ou = 2.0
+                else: live_ou = 2.5
+                force_update_fallback("soccer", date_str, m["home"], m["away"], live_ou)
+                
             ov_p = np.mean((hg + ag) > live_ou)
             un_p = np.mean((hg + ag) < live_ou)
             btts_p = np.mean((hg > 0) & (ag > 0))
             
-            # 1. 獨贏判定 (1X2)
             max_1x2 = max(hw_p, dr_p, aw_p)
             if max_1x2 == hw_p:
-                p_1x2, target_1x2 = f"{h_cn} 主勝 ({hw_p*100:.1f}%)", "HOME"
+                p_1x2, target_1x2 = f"{h_cn} 主勝<br>({hw_p*100:.1f}%)", "HOME"
             elif max_1x2 == aw_p:
-                p_1x2, target_1x2 = f"{a_cn} 客勝 ({aw_p*100:.1f}%)", "AWAY"
+                p_1x2, target_1x2 = f"{a_cn} 客勝<br>({aw_p*100:.1f}%)", "AWAY"
             else:
-                p_1x2, target_1x2 = f"平局 ({dr_p*100:.1f}%)", "DRAW"
+                p_1x2, target_1x2 = f"平局<br>({dr_p*100:.1f}%)", "DRAW"
 
-            # 2. 讓球正規判定：誰強誰讓（主讓 vs 客讓）
-            g_diff = hg - ag # 主 - 客
+            g_diff = hg - ag 
             if hw_p >= aw_p:
                 h_cov_1 = np.mean(g_diff > 1)
                 if hw_p >= 0.58 and h_cov_1 >= 0.42:
-                    spread_p = f"{h_cn} 讓-1 ({h_cov_1*100:.1f}%)"
+                    spread_p = f"{h_cn} 讓-1<br>({h_cov_1*100:.1f}%)"
                     spread_target = "HOME_M1"
                 elif hw_p >= 0.50:
-                    spread_p = f"{h_cn} 讓-0.5 ({hw_p*100:.1f}%)"
+                    spread_p = f"{h_cn} 讓-0.5<br>({hw_p*100:.1f}%)"
                     spread_target = "HOME_M05"
                 else:
                     a_cov_half = np.mean(g_diff <= 0)
-                    spread_p = f"{a_cn} 受+0.5 ({a_cov_half*100:.1f}%)"
+                    spread_p = f"{a_cn} 受+0.5<br>({a_cov_half*100:.1f}%)"
                     spread_target = "AWAY_P05"
             else:
                 a_cov_1 = np.mean(g_diff < -1)
                 if aw_p >= 0.58 and a_cov_1 >= 0.42:
-                    spread_p = f"{a_cn} 讓-1 ({a_cov_1*100:.1f}%)"
+                    spread_p = f"{a_cn} 讓-1<br>({a_cov_1*100:.1f}%)"
                     spread_target = "AWAY_M1"
                 elif aw_p >= 0.50:
-                    spread_p = f"{a_cn} 讓-0.5 ({aw_p*100:.1f}%)"
+                    spread_p = f"{a_cn} 讓-0.5<br>({aw_p*100:.1f}%)"
                     spread_target = "AWAY_M05"
                 else:
                     h_cov_half = np.mean(g_diff >= 0)
-                    spread_p = f"{h_cn} 受+0.5 ({h_cov_half*100:.1f}%)"
+                    spread_p = f"{h_cn} 受+0.5<br>({h_cov_half*100:.1f}%)"
                     spread_target = "HOME_P05"
 
-            # 3. 大小分 (對齊實開盤口)
             if ov_p >= un_p:
-                p_ou, model_ou_target = f"大 {live_ou} ({ov_p*100:.1f}%)", "OVER"
+                p_ou, model_ou_target = f"大 {live_ou}<br>({ov_p*100:.1f}%)", "OVER"
             else:
-                p_ou, model_ou_target = f"小 {live_ou} ({un_p*100:.1f}%)", "UNDER"
+                p_ou, model_ou_target = f"小 {live_ou}<br>({un_p*100:.1f}%)", "UNDER"
 
-            p_btts = f"是 ({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否 ({(1-btts_p)*100:.1f}%)"
+            p_btts = f"是<br>({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否<br>({(1-btts_p)*100:.1f}%)"
             
-            cell_base = "padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
+            # 【視覺優化】大幅縮小 Padding，壓縮行高，全域白底並智慧斷行
+            cell_base = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
             
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
@@ -454,10 +479,8 @@ def generate_soccer_report_cached(date_str: str):
                     act_diff = h_act - a_act
                     act_tot = h_act + a_act
                     
-                    # 獨贏回測
                     ml_style += "background-color: #dcfce7; color: #15803d;" if target_1x2 == act_res else "background-color: #fee2e2; color: #b91c1c;"
                     
-                    # 讓球回測 (含卡洞黃底)
                     if spread_target == "HOME_M1":
                         spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff > 1 else ("background-color: #fef9c3; color: #854d0e;" if act_diff == 1 else "background-color: #fee2e2; color: #b91c1c;")
                     elif spread_target == "HOME_M05":
@@ -471,60 +494,49 @@ def generate_soccer_report_cached(date_str: str):
                     elif spread_target == "HOME_P05":
                         spread_style += "background-color: #dcfce7; color: #15803d;" if act_diff >= 0 else "background-color: #fee2e2; color: #b91c1c;"
 
-                    # 大小分回測 (精確對應實開盤，支援卡洞走盤黃底)
                     if act_tot == live_ou:
-                        ou_style += "background-color: #fef9c3; color: #854d0e;" # 走盤/走水
+                        ou_style += "background-color: #fef9c3; color: #854d0e;" 
                     elif (act_tot > live_ou and model_ou_target == "OVER") or (act_tot < live_ou and model_ou_target == "UNDER"):
-                        ou_style += "background-color: #dcfce7; color: #15803d;" # 命中
+                        ou_style += "background-color: #dcfce7; color: #15803d;" 
                     else:
-                        ou_style += "background-color: #fee2e2; color: #b91c1c;" # 未命中
+                        ou_style += "background-color: #fee2e2; color: #b91c1c;" 
                     
-                    # 雙進回測
                     act_btts = (h_act > 0 and a_act > 0)
                     model_btts = (btts_p >= 0.5)
                     btts_style += "background-color: #dcfce7; color: #15803d;" if act_btts == model_btts else "background-color: #fee2e2; color: #b91c1c;"
                 except Exception:
                     pass
             
+            # 【視覺優化】字體全面放大 2px~3px
             row_html = f'''<tr>
-                <td style="{cell_base} font-weight: bold; font-size: 12.5px; color: #0f172a;">{h_cn} vs {a_cn}</td>
-                <td style="{cell_base} font-size: 11.5px; color: #334155;">{int(h_elo)} vs {int(a_elo)}</td>
-                <td style="{cell_base} color: #e11d48; font-weight: bold; font-size: 12.5px;">{lh:.2f}:{la:.2f}</td>
-                <td style="{cell_base} font-weight: bold; font-size: 12px; color: #0f172a;">{m["score"]}</td>
-                <td style="{ml_style} font-size: 11.5px;">{p_1x2}</td>
-                <td style="{spread_style} font-size: 11px;">{spread_p}</td>
-                <td style="{ou_style} font-size: 11.5px;">{p_ou}</td>
-                <td style="{btts_style} font-size: 11px;">{p_btts}</td>
+                <td style="{cell_base} font-weight: bold; font-size: 15px; color: #0f172a;">{h_cn}<br><span style="font-size:12px; color:#64748b;">vs</span><br>{a_cn}</td>
+                <td style="{cell_base} font-size: 13.5px; color: #334155;">{int(h_elo)}<br>vs {int(a_elo)}</td>
+                <td style="{cell_base} color: #e11d48; font-weight: bold; font-size: 14.5px;">{lh:.2f} : {la:.2f}</td>
+                <td style="{cell_base} font-weight: bold; font-size: 14px; color: #0f172a;">{m["score"]}</td>
+                <td style="{ml_style} font-size: 14px;">{p_1x2}</td>
+                <td style="{spread_style} font-size: 14px;">{spread_p}</td>
+                <td style="{ou_style} font-size: 14px;">{p_ou}</td>
+                <td style="{btts_style} font-size: 13.5px;">{p_btts}</td>
             </tr>'''
             rows.append(row_html)
             
         t_block = f'''
         <div style="margin-bottom: 22px; width: 100%; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
-            <div style="background: linear-gradient(90deg, #0f172a, #334155); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 13.5px; font-weight: bold; display: flex; align-items: center;">
+            <div style="background: linear-gradient(90deg, #0f172a, #334155); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 14px; font-weight: bold; display: flex; align-items: center;">
                 {l_name}
             </div>
             <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;">
-                <table style="width: 100%; min-width: 860px; table-layout: fixed; border-collapse: collapse; font-size: 12px; background-color: #ffffff;">
-                    <colgroup>
-                        <col style="width: 20%;">
-                        <col style="width: 10%;">
-                        <col style="width: 10%;">
-                        <col style="width: 9%;">
-                        <col style="width: 15%;">
-                        <col style="width: 16%;">
-                        <col style="width: 11%;">
-                        <col style="width: 9%;">
-                    </colgroup>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px; background-color: #ffffff;">
                     <thead>
                         <tr style="background-color: #f1f5f9; color: #0f172a; font-weight: 700; height: 38px;">
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">對戰組合</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">ClubElo</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">預估 xG</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">真實比分</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">獨贏推薦</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">讓球推薦</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">大小推薦 (開盤)</th>
-                            <th style="padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">雙進</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">對戰組合</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">ClubElo</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">預估 xG</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">真實比分</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">獨贏推薦</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">讓球推薦</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">大小推薦 (開盤)</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">雙進</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -736,13 +748,15 @@ class AutomatedMLBQuantSystem:
         return data
 
     def fetch_espn_mlb_odds(self, date_str: str):
-        """抓取 ESPN MLB 開盤大小分數據庫"""
-        date_formatted = date_str.replace("-", "")
-        url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_formatted}"
+        target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+        date_formatted = target_dt.strftime("%Y%m%d")
+        range_formatted = f"{(target_dt - timedelta(days=1)).strftime('%Y%m%d')}-{(target_dt + timedelta(days=1)).strftime('%Y%m%d')}"
+        
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         odds_dict = {}
-        try:
-            res = requests.get(url, timeout=3).json()
-            for event in res.get("events", []):
+        
+        def parse_odds(res_json):
+            for event in res_json.get("events", []):
                 comp = event.get("competitions", [{}])[0]
                 odds_list = comp.get("odds", [])
                 if odds_list:
@@ -756,21 +770,40 @@ class AutomatedMLBQuantSystem:
                                 a_name = c.get("team", {}).get("displayName", "")
                         if h_name and a_name:
                             odds_dict[(a_name, h_name)] = float(ou)
+
+        url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_formatted}"
+        try:
+            res = requests.get(url, headers=headers, timeout=5).json()
+            parse_odds(res)
+            if not odds_dict:
+                url_range = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={range_formatted}"
+                res_range = requests.get(url_range, headers=headers, timeout=5).json()
+                parse_odds(res_range)
         except Exception:
             pass
         return odds_dict
 
     def get_games_and_scores(self, date_str: str):
+        target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+        range_start = (target_dt - timedelta(days=1)).strftime('%Y-%m-%d')
+        range_end = (target_dt + timedelta(days=1)).strftime('%Y-%m-%d')
+        
         url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}&hydrate=probablePitcher,linescore,officials"
         try:
             res = requests.get(url, timeout=5).json()
+            if not res.get("dates"):
+                url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={range_start}&endDate={range_end}&hydrate=probablePitcher,linescore,officials"
+                res = requests.get(url, timeout=5).json()
         except Exception:
             return pd.DataFrame()
         
         games = []
         for d in res.get("dates", []):
+            if date_str not in d.get("date", ""):
+                pass
             for game in d.get("games", []):
                 status = game.get("status", {}).get("abstractGameState", "Preview")
+                api_state = "pre" if status in ["Preview", "Pre-Game"] else ("Final" if status == "Final" else "Live")
                 away_score = game["teams"]["away"].get("score", None)
                 home_score = game["teams"]["home"].get("score", None)
                 
@@ -790,7 +823,7 @@ class AutomatedMLBQuantSystem:
                 games.append({
                     "away_team": away_team, "away_sp": away_sp_info.get("fullName", "TBD"), "away_sp_id": away_sp_info.get("id", None),
                     "home_team": home_team, "home_sp": home_sp_info.get("fullName", "TBD"), "home_sp_id": home_sp_info.get("id", None),
-                    "status": status, "away_score": away_score, "home_score": home_score, "umpire": umpire_name
+                    "status": status, "api_state": api_state, "away_score": away_score, "home_score": home_score, "umpire": umpire_name
                 })
         return pd.DataFrame(games)
 
@@ -816,7 +849,7 @@ class AutomatedMLBQuantSystem:
             
             umpire = row["umpire"]
             ump_factor = self.umpire_factors.get(umpire, 1.00)
-            umpire_display = f"{umpire}<br><span style='color:#e91e63; font-size:10px;'>(係數 {ump_factor:.2f})</span>"
+            umpire_display = f"{umpire}<br><span style='color:#e91e63; font-size:12px;'>(係數 {ump_factor:.2f})</span>"
             
             target_xwOBA_home = home_data["xwOBA_vs_L"] if away_data["hand"] == "LHP" else home_data["xwOBA_vs_R"]
             target_xwOBA_away = away_data["xwOBA_vs_L"] if home_data["hand"] == "LHP" else away_data["xwOBA_vs_R"]
@@ -830,13 +863,17 @@ class AutomatedMLBQuantSystem:
             lambda_home = pitching_base_away * firepower_home * park_factor * weather_multiplier * ump_factor * hfa * unearned_run_multiplier
             lambda_away = pitching_base_home * firepower_away * park_factor * weather_multiplier * ump_factor * unearned_run_multiplier
             
-            # 動態匹配該場比賽的實開盤口 (若未開盤則依模型期望總分四捨五入至 0.5 基準)
-            game_market_line = espn_odds.get((row["away_team"], row["home_team"]), None)
+            api_state = row["api_state"]
+            api_ou = espn_odds.get((row["away_team"], row["home_team"]), None)
+            
+            game_market_line = sync_odds("mlb", date_str, row["home_team"], row["away_team"], api_state, api_ou)
+            
             if not game_market_line:
                 est_tot = lambda_away + lambda_home
                 game_market_line = round(est_tot * 2) / 2.0
                 if game_market_line < 6.5: game_market_line = 7.5
                 if game_market_line > 12.5: game_market_line = 11.5
+                force_update_fallback("mlb", date_str, row["home_team"], row["away_team"], game_market_line)
 
             home_runs = self.generate_negative_binomial_runs(lambda_home, self.simulations)
             away_runs = self.generate_negative_binomial_runs(lambda_away, self.simulations)
@@ -848,107 +885,119 @@ class AutomatedMLBQuantSystem:
             away_ml_prob = 1.0 - home_ml_prob
             
             run_diff = home_runs - away_runs 
-            home_cover_minus1 = np.mean(run_diff > 1)      
-            away_cover_plus1 = np.mean(run_diff < 1)       
-            away_cover_minus1 = np.mean(run_diff < -1)     
-            home_cover_plus1 = np.mean(run_diff > -1)      
+            home_cover_m15 = np.mean(run_diff > 1.5)      
+            away_cover_p15 = np.mean(run_diff < 1.5)       
+            away_cover_m15 = np.mean(run_diff < -1.5)     
+            home_cover_p15 = np.mean(run_diff > -1.5)      
             
             if home_ml_prob >= 0.5:
-                if home_cover_minus1 >= 0.45:
-                    spread_pick = f"{home_cn} 讓-1 ({home_cover_minus1*100:.1f}%)"
-                    spread_target = "HOME_COVER"
+                if home_cover_m15 >= 0.40:
+                    spread_pick = f"{home_cn} 讓-1.5<br>({home_cover_m15*100:.1f}%)"
+                    spread_target = "HOME_M15"
                 else:
-                    spread_pick = f"{away_cn} 受+1 ({away_cover_plus1*100:.1f}%)"
-                    spread_target = "AWAY_COVER"
+                    spread_pick = f"{away_cn} 受+1.5<br>({away_cover_p15*100:.1f}%)"
+                    spread_target = "AWAY_P15"
             else:
-                if away_cover_minus1 >= 0.45:
-                    spread_pick = f"{away_cn} 讓-1 ({away_cover_minus1*100:.1f}%)"
-                    spread_target = "AWAY_COVER_FAV"
+                if away_cover_m15 >= 0.40:
+                    spread_pick = f"{away_cn} 讓-1.5<br>({away_cover_m15*100:.1f}%)"
+                    spread_target = "AWAY_M15"
                 else:
-                    spread_pick = f"{home_cn} 受+1 ({home_cover_plus1*100:.1f}%)"
-                    spread_target = "HOME_COVER_DOG"
+                    spread_pick = f"{home_cn} 受+1.5<br>({home_cover_p15*100:.1f}%)"
+                    spread_target = "HOME_P15"
 
             total_runs = home_runs + away_runs
             over_prob = np.mean(total_runs > game_market_line)
             under_prob = np.mean(total_runs < game_market_line)
             
-            model_ml_pick_name = home_cn if home_ml_prob >= 0.5 else away_cn
+            if home_ml_prob >= 0.5:
+                model_ml_pick_name = home_cn
+                ml_pick_type = "主勝"
+                ml_target = "HOME"
+            else:
+                model_ml_pick_name = away_cn
+                ml_pick_type = "客勝"
+                ml_target = "AWAY"
+                
             model_ou_pick = "大分" if over_prob >= under_prob else "小分"
             
-            ml_text = f"{model_ml_pick_name} ({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
-            ou_text = f"{model_ou_pick} {game_market_line} ({max(over_prob, under_prob)*100:.1f}%)"
+            ml_text = f"{model_ml_pick_name} {ml_pick_type}<br>({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
+            ou_text = f"{model_ou_pick} {game_market_line}<br>({max(over_prob, under_prob)*100:.1f}%)"
             
-            ml_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600;"
-            spread_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600;"
-            ou_style = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600;"
+            # 【手機版排版關鍵】使用 normal 與 line-height，完全不重疊且字體放大
+            cell_base = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
+            ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
+            spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
+            ou_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             
             is_final = (row["status"] == "Final" and row["home_score"] is not None)
             if is_final:
                 actual_score_str = f"{row['away_score']} : {row['home_score']}"
-                actual_ml_winner_name = home_cn if row["home_score"] > row["away_score"] else away_cn
+                actual_ml_target = "HOME" if row["home_score"] > row["away_score"] else "AWAY"
                 actual_total = row["home_score"] + row["away_score"]
                 actual_diff = row["home_score"] - row["away_score"]
                 
-                ml_style += "background-color: #dcfce7; color: #15803d;" if model_ml_pick_name == actual_ml_winner_name else "background-color: #fee2e2; color: #b91c1c;"
+                ml_style += "background-color: #dcfce7; color: #15803d;" if ml_target == actual_ml_target else "background-color: #fee2e2; color: #b91c1c;"
                     
-                if spread_target == "HOME_COVER":
-                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff > 1 else ("background-color: #fef9c3; color: #854d0e;" if actual_diff == 1 else "background-color: #fee2e2; color: #b91c1c;")
-                elif spread_target == "AWAY_COVER":
-                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff <= 0 else ("background-color: #fef9c3; color: #854d0e;" if actual_diff == 1 else "background-color: #fee2e2; color: #b91c1c;")
-                elif spread_target == "AWAY_COVER_FAV":
-                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff < -1 else ("background-color: #fef9c3; color: #854d0e;" if actual_diff == -1 else "background-color: #fee2e2; color: #b91c1c;")
-                elif spread_target == "HOME_COVER_DOG":
-                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff >= 0 else ("background-color: #fef9c3; color: #854d0e;" if actual_diff == -1 else "background-color: #fee2e2; color: #b91c1c;")
-                    
-                # 大小分回測 (精準支援卡洞走盤)
+                if spread_target == "HOME_M15":
+                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff > 1.5 else "background-color: #fee2e2; color: #b91c1c;"
+                elif spread_target == "AWAY_P15":
+                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff < 1.5 else "background-color: #fee2e2; color: #b91c1c;"
+                elif spread_target == "AWAY_M15":
+                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff < -1.5 else "background-color: #fee2e2; color: #b91c1c;"
+                elif spread_target == "HOME_P15":
+                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff > -1.5 else "background-color: #fee2e2; color: #b91c1c;"
+
                 if actual_total == game_market_line:
-                    ou_style += "background-color: #fef9c3; color: #854d0e;" # 走盤
+                    ou_style += "background-color: #fef9c3; color: #854d0e;" 
                 elif (actual_total > game_market_line and model_ou_pick == "大分") or (actual_total < game_market_line and model_ou_pick == "小分"):
-                    ou_style += "background-color: #dcfce7; color: #15803d;" # 命中
+                    ou_style += "background-color: #dcfce7; color: #15803d;" 
                 else:
-                    ou_style += "background-color: #fee2e2; color: #b91c1c;" # 未命中
+                    ou_style += "background-color: #fee2e2; color: #b91c1c;" 
             else:
                 actual_score_str = "未完賽"
 
-            sp_text_away = f"{row['away_sp']}<br><span style='color: #475569; font-size:11px;'>({away_data['hand']} | FIP {away_data['sp_advanced']:.2f})</span>" if row['away_sp'] != "TBD" else "TBD"
-            sp_text_home = f"{row['home_sp']}<br><span style='color: #475569; font-size:11px;'>({home_data['hand']} | FIP {home_data['sp_advanced']:.2f})</span>" if row['home_sp'] != "TBD" else "TBD"
+            sp_text_away = f"{row['away_sp']}<br><span style='color: #475569; font-size:12px;'>({away_data['hand']} | FIP {away_data['sp_advanced']:.2f})</span>" if row['away_sp'] != "TBD" else "TBD"
+            sp_text_home = f"{row['home_sp']}<br><span style='color: #475569; font-size:12px;'>({home_data['hand']} | FIP {home_data['sp_advanced']:.2f})</span>" if row['home_sp'] != "TBD" else "TBD"
 
-            bp_text_away = f"<span style='font-size:10.5px; color: #0f172a;'>{away_data['fatigue_desc']}</span>"
-            bp_text_home = f"<span style='font-size:10.5px; color: #0f172a;'>{home_data['fatigue_desc']}</span>"
+            bp_text_away = f"<span style='font-size:12.5px; color: #0f172a;'>{away_data['fatigue_desc']}</span>"
+            bp_text_home = f"<span style='font-size:12.5px; color: #0f172a;'>{home_data['fatigue_desc']}</span>"
 
             row_html = f'''<tr>
-                <td style="padding: 8px 6px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 12px; color: #0f172a; text-align: center; vertical-align: middle; white-space: nowrap;">{away_cn} @ {home_cn}</td>
-                <td style="padding: 6px 3px; border: 1px solid #cbd5e1; font-size: 11.5px; text-align: center; vertical-align: middle; color: #0f172a; white-space: nowrap;">{sp_text_away}<br>vs<br>{sp_text_home}</td>
-                <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">{bp_text_away}<br>{bp_text_home}</td>
-                <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; font-size: 11px; color: #0f172a; white-space: nowrap;">{umpire_display}</td>
-                <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; font-size: 11px; color: #0284c7; white-space: nowrap;">{weather_desc}</td>
-                <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; color: #e11d48; font-weight: bold; font-size: 12.5px; white-space: nowrap;">{lambda_away:.2f} : {lambda_home:.2f}</td>
-                <td style="padding: 6px 3px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; font-weight: bold; font-size: 12px; color: #0f172a; white-space: nowrap;">{actual_score_str}</td>
-                <td style="{ml_style}; font-size: 11.5px; white-space: nowrap;">{ml_text}</td>
-                <td style="{spread_style}; font-size: 11px; white-space: nowrap;">{spread_pick}</td>
-                <td style="{ou_style}; font-size: 11.5px; white-space: nowrap;">{ou_text}</td>
+                <td style="{cell_base} font-weight: bold; font-size: 15px; color: #0f172a;">
+                    <span style="color:#64748b; font-size:12px;">(客)</span> {away_cn}<br>
+                    <span style="color:#64748b; font-size:12px;">(主)</span> {home_cn}
+                </td>
+                <td style="{cell_base} font-size: 13px; color: #0f172a;">{sp_text_away}<br>vs<br>{sp_text_home}</td>
+                <td style="{cell_base}">{bp_text_away}<br>{bp_text_home}</td>
+                <td style="{cell_base} font-size: 13px; color: #0f172a;">{umpire_display}</td>
+                <td style="{cell_base} font-size: 13px; color: #0284c7;">{weather_desc}</td>
+                <td style="{cell_base} color: #e11d48; font-weight: bold; font-size: 14.5px;">{lambda_away:.2f} : {lambda_home:.2f}</td>
+                <td style="{cell_base} font-weight: bold; font-size: 14px; color: #0f172a;">{actual_score_str}</td>
+                <td style="{ml_style} font-size: 14px;">{ml_text}</td>
+                <td style="{spread_style} font-size: 14px;">{spread_pick}</td>
+                <td style="{ou_style} font-size: 14px;">{ou_text}</td>
             </tr>'''
             rows_html.append(row_html)
             
         table_html = f'''
         <div style="margin-bottom: 20px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
-            <div style="background: linear-gradient(90deg, #1e3a8a, #0369a1); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 13.5px; font-weight: bold;">
+            <div style="background: linear-gradient(90deg, #1e3a8a, #0369a1); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 14px; font-weight: bold;">
                 ⚾ 美國職棒大聯盟 (Major League Baseball)
             </div>
             <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;">
-                <table style="width: 100%; min-width: 900px; border-collapse: collapse; font-size: 12px; background-color: #ffffff;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px; background-color: #ffffff;">
                     <thead>
                         <tr style="background-color: #f1f5f9; text-align: center; color: #0f172a; font-weight: bold; height: 38px;">
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">對戰組合</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">先發 & 慣用手</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">昨日牛棚狀態</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">本壘板主審</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">天氣與風向</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">預估分(客:主)</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">真實比分</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">獨贏推薦</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">讓分推薦 (±1)</th>
-                            <th style="padding: 10px 8px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">大小推薦 (開盤對齊)</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">對戰組合</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">先發 & 慣用手</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">昨日牛棚狀態</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">本壘板主審</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">天氣與風向</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">預估分(客:主)</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">真實比分</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">獨贏推薦</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">讓分推薦 (±1.5)</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">大小推薦 (尾盤)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -991,9 +1040,8 @@ def render_soccer_inplay_calculator():
     st.caption("依據五大聯賽各隊即時時間衰減、落後追分強度與少打一人懲罰模型，秒出滾球公允賠率與進場訊號。")
     
     dropdown_labels = list(SOCCER_INPLAY_DROPDOWN.keys())
-    
-    default_h_idx = dropdown_labels.index("【西甲】皇家馬德里") if "【西甲】皇家馬德里" in dropdown_labels else 0
-    default_a_idx = dropdown_labels.index("【西甲】巴塞隆納") if "【西甲】巴塞隆納" in dropdown_labels else 1
+    default_h_idx = dropdown_labels.index("【足球】皇家馬德里 (Real Madrid)") if "【足球】皇家馬德里 (Real Madrid)" in dropdown_labels else 0
+    default_a_idx = dropdown_labels.index("【足球】巴塞隆納 (Barcelona)") if "【足球】巴塞隆納 (Barcelona)" in dropdown_labels else 1
 
     col1, col2 = st.columns(2)
     with col1:
@@ -1022,7 +1070,6 @@ def render_soccer_inplay_calculator():
         base_la = max(0.3, 1.20 * (1.0 - diff / 550.0))
         
         time_rem_ratio = max(0.02, (90 - minute) / 90.0)
-        
         h_trail_boost = 1.20 if (curr_home_score < curr_away_score and minute >= 60) else 1.0
         a_trail_boost = 1.20 if (curr_away_score < curr_home_score and minute >= 60) else 1.0
         
@@ -1178,7 +1225,6 @@ def dashboard_view():
     apply_branding_css()
     render_brand_header()
 
-    # 1. 管理員專屬控制台
     if st.session_state.get("is_admin", False):
         with st.expander("🛠️ **管理員控制台 (VIP 代碼生成與管理)**", expanded=False):
             st.markdown("##### 📌 一鍵生成 VIP 7 天防轉傳專屬代碼")
@@ -1227,13 +1273,11 @@ def dashboard_view():
                             st.success(f"已解綁 {info['user_name']}")
                             st.rerun()
 
-    # 2. 一般會員頂部歡迎條
     elif st.session_state.get("user_name"):
         rem = st.session_state.get("days_left", 7)
         curr_tok = st.session_state.get("current_token", "")
         st.info(f"✨ 歡迎 VIP 會員 **{st.session_state['user_name']}** ｜ 您的通行碼： `{curr_tok}` ｜ 有效期剩餘： **{rem} 天**")
 
-    # 頂部導航
     col_t, col_l = st.columns([4, 1])
     with col_t:
         st.header("🏆 職業體育雙向量化定價系統")
@@ -1246,7 +1290,6 @@ def dashboard_view():
             if "vip" in st.query_params: del st.query_params["vip"]
             st.rerun()
 
-    # ================= 核心功能切換：賽前定價 vs 即時走地試算 =================
     st.markdown("<br>", unsafe_allow_html=True)
     main_tab1, main_tab2 = st.tabs(["📊 賽前量化定價與回測 (Pre-Match)", "⚡ 即時走地公允定價試算器 (Live In-Play)"])
 
@@ -1263,34 +1306,32 @@ def dashboard_view():
 
         st.divider()
 
-        # 足球賽前介面
         if selected_sport == "⚽ 歐洲頂級足球":
-            st.subheader("⚽ 歐洲五大聯賽與歐冠量化定價 (實時開盤對齊)")
+            st.subheader("⚽ 歐洲五大聯賽與歐冠量化定價 (尾盤自動鎖死防護)")
             selected_date = st.date_input("選擇足球賽事日期", value=date.today(), key="soccer_date")
             date_str = selected_date.strftime("%Y-%m-%d")
 
             if st.button("🔍 獲取足球即時量化與回測報告", use_container_width=True, type="primary"):
-                with st.spinner(f"正在同步 ClubElo 與 ESPN 實時開盤數據 {date_str}..."):
+                with st.spinner(f"正在同步 ClubElo 與 ESPN 盤口數據庫 {date_str}..."):
                     count, elo_len, report_html = generate_soccer_report_cached(date_str)
                     if count == 0:
-                        st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。建議選擇週末賽事測試。")
+                        st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。")
                     else:
-                        st.success(f"✅ 成功同步 {elo_len} 隊歐洲戰力與實時大小球盤口！已量化分析 {count} 場比賽！")
+                        st.success(f"✅ 成功同步 {elo_len} 隊歐洲戰力！已量化分析 {count} 場比賽 (尾盤鎖定生效中)！")
                         st.markdown(report_html, unsafe_allow_html=True)
 
-        # MLB 賽前介面
         else:
-            st.subheader("⚾ MLB 美國職棒大聯盟量化定價 (實時開盤對齊)")
+            st.subheader("⚾ MLB 美國職棒大聯盟量化定價 (尾盤自動鎖死防護)")
             selected_date = st.date_input("選擇 MLB 賽事日期", value=date.today(), key="mlb_date")
             date_str = selected_date.strftime("%Y-%m-%d")
 
             if st.button("🔍 獲取 MLB 即時量化與回測報告", use_container_width=True, type="primary"):
-                with st.spinner(f"正在抓取先發投手、氣象與實時大小分開盤數據，啟動 10,000 次量化模擬 {date_str} 賽事..."):
+                with st.spinner(f"正在抓取先發投手、氣象與開盤數據，啟動 10,000 次量化模擬 {date_str} 賽事..."):
                     count, report_html = generate_mlb_report_cached(date_str)
                     if count == 0:
                         st.warning(f"📅 【{date_str}】 當日 MLB「無比賽場次」。")
                     else:
-                        st.success(f"✅ 成功抓取 {count} 場 MLB 比賽，已自動對齊各球場實開盤口完成 10,000 次模擬！")
+                        st.success(f"✅ 成功抓取 {count} 場 MLB 比賽，並完成尾盤追蹤與防護鎖死！")
                         st.markdown(report_html, unsafe_allow_html=True)
 
     with main_tab2:
@@ -1309,7 +1350,6 @@ def dashboard_view():
         else:
             render_mlb_inplay_calculator()
 
-# ================= 流程路由控制 =================
 if not st.session_state["authenticated"]:
     login_view()
 else:
