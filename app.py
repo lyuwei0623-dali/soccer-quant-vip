@@ -10,7 +10,7 @@ import base64
 import sqlite3
 from datetime import datetime, date, timedelta, timezone
 
-# 1. 頁面設定（支援手機響應式寬度）
+# 1. 頁面設定（支援手機響應式寬度與捲動）
 st.set_page_config(
     page_title="雙運動量化定價系統 (官方VIP)",
     page_icon="🏆",
@@ -71,24 +71,20 @@ def save_db_ou(sport, date_str, home, away, ou_line, is_locked):
 def sync_odds(sport, date_str, home, away, api_state, api_ou):
     db_ou, is_locked = get_db_ou(sport, date_str, home, away)
     is_completed = (api_state in ['in', 'post', 'Live', 'Final'])
-    
     if db_ou and is_locked:
         return db_ou
-        
     if api_ou:
         save_db_ou(sport, date_str, home, away, api_ou, is_completed)
         return api_ou
-        
     if db_ou:
         save_db_ou(sport, date_str, home, away, db_ou, True)
         return db_ou
-        
     return None
 
 def force_update_fallback(sport, date_str, home, away, calc_ou):
     save_db_ou(sport, date_str, home, away, calc_ou, 1)
 
-# 2. 全局雲端裝置綁定資料庫
+# ================= 1. 裝置綁定與 1 週防偽認證系統 =================
 @st.cache_resource
 def get_device_registry():
     return {}
@@ -112,25 +108,19 @@ def parse_and_validate_token(token: str):
     clean_token = token.strip().upper()
     if clean_token == MASTER_PASSCODE:
         return True, "管理員", date.today(), 999
-        
     if "_" not in clean_token:
         return False, None, None, 0
-        
     parts = clean_token.rsplit("_", 1)
     user_name, sig = parts[0], parts[1]
-    
     if len(sig) != 4 or not user_name:
         return False, None, None, 0
-        
     today = date.today()
     for i in range(8):
         check_date = today - timedelta(days=i)
         date_str = check_date.strftime("%Y-%m-%d")
         expected_sig = hashlib.sha256(f"{user_name}_{date_str}_{SECRET_SALT}".encode()).hexdigest()[:4].upper()
         if sig == expected_sig:
-            remaining_days = 7 - i
-            return True, user_name, check_date, remaining_days
-            
+            return True, user_name, check_date, 7 - i
     return False, None, None, 0
 
 def apply_branding_css():
@@ -156,24 +146,7 @@ def apply_branding_css():
     """, unsafe_allow_html=True)
 
 def render_brand_header():
-    logo_html = ""
-    if CUSTOM_LOGO_URL:
-        logo_html = f'<img src="{CUSTOM_LOGO_URL}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #f59e0b; margin-right: 12px; object-fit: cover;">'
-    else:
-        for ext in ["jpg", "jpeg", "png", "webp", "jgp"]:
-            filename = f"logo.{ext}"
-            if os.path.exists(filename):
-                try:
-                    with open(filename, "rb") as img_f:
-                        encoded = base64.b64encode(img_f.read()).decode()
-                    mime_type = "jpeg" if ext in ["jpg", "jpeg", "jgp"] else ext
-                    logo_html = f'<img src="data:image/{mime_type};base64,{encoded}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #f59e0b; margin-right: 12px; object-fit: cover;">'
-                    break
-                except Exception:
-                    pass
-        if not logo_html:
-            logo_html = '<div style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; margin-right: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);">🛡️</div>'
-
+    logo_html = '<div style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; margin-right: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);">🛡️</div>'
     header_html = f"""
     <div style="background: linear-gradient(90deg, #0f172a, #1e293b); border: 1px solid #334155; padding: 12px 16px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
         <div style="display: flex; align-items: center;">
@@ -186,9 +159,7 @@ def render_brand_header():
                 <div style="color: #94a3b8; font-size: 11px; margin-top: 2px;">{BRAND_TAGLINE}</div>
             </div>
         </div>
-        <div style="text-align: right;">
-            <span style="color: #38bdf8; font-size: 11px; font-weight: 600;">● 核心在線</span>
-        </div>
+        <div style="text-align: right;"><span style="color: #38bdf8; font-size: 11px; font-weight: 600;">● 核心在線</span></div>
     </div>
     """
     st.markdown(header_html, unsafe_allow_html=True)
@@ -196,7 +167,6 @@ def render_brand_header():
 registry = get_device_registry()
 url_vip = st.query_params.get("vip", "").strip().upper()
 dev_fp = get_client_fingerprint()
-
 auth_msg = ""
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -209,7 +179,6 @@ def try_authenticate(input_token: str):
     clean = input_token.strip().upper()
     if not clean:
         return False, "請輸入通行碼！"
-        
     if clean == MASTER_PASSCODE:
         st.session_state["authenticated"] = True
         st.session_state["is_admin"] = True
@@ -217,23 +186,15 @@ def try_authenticate(input_token: str):
         st.session_state["current_token"] = MASTER_PASSCODE
         st.query_params["vip"] = MASTER_PASSCODE
         return True, "管理員登入成功！"
-        
     is_valid, u_name, issue_dt, rem_days = parse_and_validate_token(clean)
     if not is_valid:
         return False, "⛔ 通行碼無效或已過期，請向官方管理員領取最新通行碼！"
-        
     if clean not in registry:
-        registry[clean] = {
-            "user_name": u_name,
-            "issue_date": issue_dt.strftime("%Y-%m-%d"),
-            "dev_id": dev_fp,
-            "bound_at": datetime.now().strftime("%m-%d %H:%M")
-        }
+        registry[clean] = {"user_name": u_name, "issue_date": issue_dt.strftime("%Y-%m-%d"), "dev_id": dev_fp, "bound_at": datetime.now().strftime("%m-%d %H:%M")}
     else:
         bound_dev = registry[clean].get("dev_id", "")
         if bound_dev and bound_dev != dev_fp and bound_dev != "device_default":
             return False, "⛔ 訪問被拒：此 VIP 代碼已綁定其他手機，嚴禁轉傳！"
-            
     st.session_state["authenticated"] = True
     st.session_state["is_admin"] = False
     st.session_state["user_name"] = u_name
@@ -247,30 +208,30 @@ if not st.session_state["authenticated"] and url_vip:
     if not ok:
         auth_msg = msg
 
-# ================= 模組一：歐洲五大聯賽與歐冠量化引擎 =================
+# ================= 3. 歐洲五大聯賽與歐冠量化引擎 =================
 BASE_SOCCER_ELO = {
     "Real Madrid": 2010.0, "Barcelona": 1935.0, "Atletico Madrid": 1865.0, "Girona": 1785.0,
     "Athletic Club": 1805.0, "Athletic": 1805.0, "Real Sociedad": 1775.0, "Villarreal": 1775.0,
     "Real Betis": 1745.0, "Sevilla": 1710.0, "Celta Vigo": 1685.0, "Celta": 1685.0,
     "Osasuna": 1675.0, "Mallorca": 1680.0, "Valencia": 1690.0, "Rayo Vallecano": 1680.0,
     "Las Palmas": 1650.0, "Getafe": 1660.0, "Alaves": 1660.0, "Leganes": 1635.0,
-    "Espanyol": 1655.0, "Valladolid": 1625.0,
-    "Manchester City": 2020.0, "Arsenal": 1985.0, "Liverpool": 1970.0, "Chelsea": 1835.0,
-    "Tottenham": 1815.0, "Tottenham Hotspur": 1815.0, "Newcastle": 1815.0, "Newcastle United": 1815.0,
-    "Aston Villa": 1835.0, "Manchester United": 1785.0, "Brighton": 1775.0, "Brighton & Hove Albion": 1775.0,
-    "West Ham": 1725.0, "West Ham United": 1725.0, "Fulham": 1715.0, "Bournemouth": 1705.0,
-    "Brentford": 1705.0, "Crystal Palace": 1715.0, "Wolves": 1685.0, "Wolverhampton Wanderers": 1685.0,
-    "Everton": 1690.0, "Nottingham Forest": 1685.0, "Leicester": 1675.0, "Southampton": 1635.0,
-    "Ipswich": 1615.0, "Ipswich Town": 1615.0,
-    "Hull City": 1650.0, "Hull": 1650.0, "Sunderland": 1660.0, "Coventry City": 1640.0, "Coventry": 1640.0, "Leeds United": 1670.0, "Leeds": 1670.0,
-    "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0,
-    "RB Leipzig": 1875.0, "Stuttgart": 1835.0, "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0,
-    "Wolfsburg": 1725.0, "Mainz": 1705.0, "Augsburg": 1705.0, "Werder Bremen": 1715.0,
-    "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0,
-    "Milan": 1865.0, "AC Milan": 1865.0, "Roma": 1805.0, "Lazio": 1805.0, "Napoli": 1825.0,
-    "Bologna": 1815.0, "Fiorentina": 1775.0, "Torino": 1755.0,
-    "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0,
-    "Lyon": 1775.0, "Nice": 1775.0, "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0
+    "Espanyol": 1655.0, "Valladolid": 1625.0, "Manchester City": 2020.0, "Arsenal": 1985.0,
+    "Liverpool": 1970.0, "Chelsea": 1835.0, "Tottenham": 1815.0, "Tottenham Hotspur": 1815.0,
+    "Newcastle": 1815.0, "Newcastle United": 1815.0, "Aston Villa": 1835.0, "Manchester United": 1785.0,
+    "Brighton": 1775.0, "Brighton & Hove Albion": 1775.0, "West Ham": 1725.0, "West Ham United": 1725.0,
+    "Fulham": 1715.0, "Bournemouth": 1705.0, "Brentford": 1705.0, "Crystal Palace": 1715.0,
+    "Wolves": 1685.0, "Wolverhampton Wanderers": 1685.0, "Everton": 1690.0, "Nottingham Forest": 1685.0,
+    "Leicester": 1675.0, "Southampton": 1635.0, "Ipswich": 1615.0, "Ipswich Town": 1615.0,
+    "Hull City": 1650.0, "Hull": 1650.0, "Sunderland": 1660.0, "Coventry City": 1640.0,
+    "Coventry": 1640.0, "Leeds United": 1670.0, "Leeds": 1670.0, "Bayern Munich": 1955.0,
+    "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0, "RB Leipzig": 1875.0, "Stuttgart": 1835.0,
+    "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0, "Wolfsburg": 1725.0, "Mainz": 1705.0,
+    "Augsburg": 1705.0, "Werder Bremen": 1715.0, "Inter": 1975.0, "Internazionale": 1975.0,
+    "Atalanta": 1885.0, "Juventus": 1875.0, "Milan": 1865.0, "AC Milan": 1865.0,
+    "Roma": 1805.0, "Lazio": 1805.0, "Napoli": 1825.0, "Bologna": 1815.0,
+    "Fiorentina": 1775.0, "Torino": 1755.0, "Paris Saint-Germain": 1925.0, "Monaco": 1835.0,
+    "Lille": 1815.0, "Marseille": 1785.0, "Lyon": 1775.0, "Nice": 1775.0,
+    "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0
 }
 
 SOCCER_LEAGUES = {
@@ -339,30 +300,17 @@ def fetch_clubelo_cached(date_str: str):
 
 def fetch_soccer_matches_live(date_str: str):
     target_dt = datetime.strptime(date_str, "%Y-%m-%d")
-    dates_to_query = [
-        (target_dt - timedelta(days=1)).strftime("%Y%m%d"),
-        target_dt.strftime("%Y%m%d"),
-        (target_dt + timedelta(days=1)).strftime("%Y%m%d")
-    ]
-    
+    dates_to_query = [(target_dt - timedelta(days=1)).strftime("%Y%m%d"), target_dt.strftime("%Y%m%d"), (target_dt + timedelta(days=1)).strftime("%Y%m%d")]
     all_matches = {}
     session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Referer": "https://www.espn.com/",
-        "Origin": "https://www.espn.com"
-    })
+    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept": "application/json, text/plain, */*", "Referer": "https://www.espn.com/"})
     
     for league_name, league_slug in SOCCER_LEAGUES.items():
         seen_ids = set()
         raw_events = []
-        base_hosts = ["https://site.web.api.espn.com", "https://site.api.espn.com"]
-        
-        for host in base_hosts:
+        for host in ["https://site.web.api.espn.com", "https://site.api.espn.com"]:
             try:
-                u_curr = f"{host}/apis/site/v2/sports/soccer/{league_slug}/scoreboard?limit=100"
-                r = session.get(u_curr, timeout=4)
+                r = session.get(f"{host}/apis/site/v2/sports/soccer/{league_slug}/scoreboard?limit=100", timeout=4)
                 if r.status_code == 200:
                     for ev in r.json().get("events", []):
                         eid = ev.get("id")
@@ -371,11 +319,9 @@ def fetch_soccer_matches_live(date_str: str):
                             raw_events.append(ev)
             except Exception:
                 pass
-                
             for d in dates_to_query:
                 try:
-                    u_date = f"{host}/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={d}&limit=100"
-                    r = session.get(u_date, timeout=4)
+                    r = session.get(f"{host}/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={d}&limit=100", timeout=4)
                     if r.status_code == 200:
                         for ev in r.json().get("events", []):
                             eid = ev.get("id")
@@ -384,7 +330,6 @@ def fetch_soccer_matches_live(date_str: str):
                                 raw_events.append(ev)
                 except Exception:
                     pass
-            
             if raw_events:
                 break
 
@@ -393,7 +338,6 @@ def fetch_soccer_matches_live(date_str: str):
             ev_date_raw = event.get("date", "")
             if not ev_date_raw:
                 continue
-                
             try:
                 dt_utc = datetime.fromisoformat(ev_date_raw.replace("Z", "+00:00"))
                 dt_tw = dt_utc.astimezone(timezone(timedelta(hours=8)))
@@ -416,15 +360,12 @@ def fetch_soccer_matches_live(date_str: str):
                 t = t_obj.get("name") or t_obj.get("displayName") or t_obj.get("shortDisplayName", "TBD")
                 if c.get("homeAway") == "home":
                     h_team = t
-                    if is_completed or api_state in ['in', 'post']: 
-                        h_score = c.get("score")
+                    if is_completed or api_state in ['in', 'post']: h_score = c.get("score")
                 else:
                     a_team = t
-                    if is_completed or api_state in ['in', 'post']: 
-                        a_score = c.get("score")
+                    if is_completed or api_state in ['in', 'post']: a_score = c.get("score")
                     
             act_str = f"{h_score}:{a_score}" if h_score is not None else "未完賽"
-            
             api_ou = None
             odds_list = comp.get("odds", [])
             if odds_list:
@@ -436,24 +377,17 @@ def fetch_soccer_matches_live(date_str: str):
                     pass
             
             final_ou_line = sync_odds("soccer", date_str, h_team, a_team, api_state, api_ou)
-            matches.append({
-                "home": h_team, 
-                "away": a_team, 
-                "score": act_str, 
-                "league": league_slug, 
-                "ou_line": final_ou_line
-            })
+            matches.append({"home": h_team, "away": a_team, "score": act_str, "league": league_slug, "ou_line": final_ou_line})
             
         if matches:
             all_matches[league_name] = matches
-            
     return all_matches
 
 def generate_soccer_report(date_str: str):
     elo_db = fetch_clubelo_cached(date_str)
     all_matches = fetch_soccer_matches_live(date_str)
     tot = sum(len(m) for m in all_matches.values())
-    if tot == 0: 
+    if tot == 0:
         return 0, len(elo_db), ""
     
     html_blocks = []
@@ -478,10 +412,7 @@ def generate_soccer_report(date_str: str):
             live_ou = m.get("ou_line")
             if not live_ou:
                 exp_tot = lh + la
-                if exp_tot >= 3.6: live_ou = 3.5
-                elif exp_tot >= 3.1: live_ou = 3.0
-                elif exp_tot <= 2.2: live_ou = 2.0
-                else: live_ou = 2.5
+                live_ou = 3.5 if exp_tot >= 3.6 else (3.0 if exp_tot >= 3.1 else (2.0 if exp_tot <= 2.2 else 2.5))
                 force_update_fallback("soccer", date_str, m["home"], m["away"], live_ou)
                 
             ov_p = np.mean((hg + ag) > live_ou)
@@ -500,42 +431,33 @@ def generate_soccer_report(date_str: str):
             if hw_p >= aw_p:
                 h_cov_1 = np.mean(g_diff > 1)
                 if hw_p >= 0.58 and h_cov_1 >= 0.42:
-                    spread_p = f"{h_cn} 讓-1<br>({h_cov_1*100:.1f}%)"
-                    spread_target = "HOME_M1"
+                    spread_p, spread_target = f"{h_cn} 讓-1<br>({h_cov_1*100:.1f}%)", "HOME_M1"
                 elif hw_p >= 0.50:
-                    spread_p = f"{h_cn} 讓-0.5<br>({hw_p*100:.1f}%)"
-                    spread_target = "HOME_M05"
+                    spread_p, spread_target = f"{h_cn} 讓-0.5<br>({hw_p*100:.1f}%)", "HOME_M05"
                 else:
-                    a_cov_half = np.mean(g_diff <= 0)
-                    spread_p = f"{a_cn} 受+0.5<br>({a_cov_half*100:.1f}%)"
-                    spread_target = "AWAY_P05"
+                    spread_p, spread_target = f"{a_cn} 受+0.5<br>({np.mean(g_diff <= 0)*100:.1f}%)", "AWAY_P05"
             else:
                 a_cov_1 = np.mean(g_diff < -1)
                 if aw_p >= 0.58 and a_cov_1 >= 0.42:
-                    spread_p = f"{a_cn} 讓-1<br>({a_cov_1*100:.1f}%)"
-                    spread_target = "AWAY_M1"
+                    spread_p, spread_target = f"{a_cn} 讓-1<br>({a_cov_1*100:.1f}%)", "AWAY_M1"
                 elif aw_p >= 0.50:
-                    spread_p = f"{a_cn} 讓-0.5<br>({aw_p*100:.1f}%)"
-                    spread_target = "AWAY_M05"
+                    spread_p, spread_target = f"{a_cn} 讓-0.5<br>({aw_p*100:.1f}%)", "AWAY_M05"
                 else:
-                    h_cov_half = np.mean(g_diff >= 0)
-                    spread_p = f"{h_cn} 受+0.5<br>({h_cov_half*100:.1f}%)"
-                    spread_target = "HOME_P05"
+                    spread_p, spread_target = f"{h_cn} 受+0.5<br>({np.mean(g_diff >= 0)*100:.1f}%)", "HOME_P05"
 
-            if ov_p >= un_p:
-                p_ou, model_ou_target = f"大 {live_ou}<br>({ov_p*100:.1f}%)", "OVER"
-            else:
-                p_ou, model_ou_target = f"小 {live_ou}<br>({un_p*100:.1f}%)", "UNDER"
-
+            p_ou, model_ou_target = (f"大 {live_ou}<br>({ov_p*100:.1f}%)", "OVER") if ov_p >= un_p else (f"小 {live_ou}<br>({un_p*100:.1f}%)", "UNDER")
             p_btts = f"是<br>({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否<br>({(1-btts_p)*100:.1f}%)"
             
-            # 格子基底樣式：明確支援自動換行與精確垂直居中
+            # 預估正確比分推薦計算（取模擬次數最多的前兩個高機率比分）
+            score_counts = pd.Series(list(zip(hg, ag))).value_counts().head(1)
+            pred_score_str = f"{score_counts.index[0][0]} : {score_counts.index[0][1]}" if not score_counts.empty else "1 : 1"
+
             cell_base = "padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; word-break: break-word;"
-            
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             ou_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             btts_style = f"{cell_base} color: #0f172a; font-weight: 600;"
+            score_style = f"{cell_base} color: #0284c7; font-weight: 700;"
 
             if m["score"] != "未完賽" and ":" in m["score"]:
                 try:
@@ -566,9 +488,8 @@ def generate_soccer_report(date_str: str):
                     else:
                         ou_style += "background-color: #fee2e2; color: #b91c1c;" 
                     
-                    act_btts = (h_act > 0 and a_act > 0)
-                    model_btts = (btts_p >= 0.5)
-                    btts_style += "background-color: #dcfce7; color: #15803d;" if act_btts == model_btts else "background-color: #fee2e2; color: #b91c1c;"
+                    btts_style += "background-color: #dcfce7; color: #15803d;" if (h_act > 0 and a_act > 0) == (btts_p >= 0.5) else "background-color: #fee2e2; color: #b91c1c;"
+                    score_style += "background-color: #dcfce7; color: #15803d;" if pred_score_str == f"{a_act} : {h_act}" or pred_score_str == f"{h_act} : {a_act}" else ""
                 except Exception:
                     pass
             
@@ -577,6 +498,7 @@ def generate_soccer_report(date_str: str):
                 <td style="{cell_base} font-size: 13.5px; color: #334155;">{int(h_elo)}<br>vs {int(a_elo)}</td>
                 <td style="{cell_base} color: #e11d48; font-weight: bold; font-size: 14.5px;">{lh:.2f} : {la:.2f}</td>
                 <td style="{cell_base} font-weight: bold; font-size: 14px; color: #0f172a;">{m["score"]}</td>
+                <td style="{score_style}">預測 {pred_score_str}</td>
                 <td style="{ml_style} font-size: 14px;">{p_1x2}</td>
                 <td style="{spread_style} font-size: 14px;">{spread_p}</td>
                 <td style="{ou_style} font-size: 14px;">{p_ou}</td>
@@ -584,23 +506,24 @@ def generate_soccer_report(date_str: str):
             </tr>'''
             rows.append(row_html)
             
-        # 足球表格：加入 table-layout: fixed 與 colgroup 欄位鎖定，保證各聯賽完美對齊
+        # 歐洲足球表格：加入固定欄寬 <colgroup> 確保跨聯賽完美對齊
         t_block = f'''
         <div style="margin-bottom: 22px; width: 100%; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
             <div style="background: linear-gradient(90deg, #0f172a, #334155); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 14px; font-weight: bold; display: flex; align-items: center;">
                 {l_name}
             </div>
             <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;">
-                <table style="width: 100%; min-width: 820px; table-layout: fixed; border-collapse: collapse; font-size: 14px; background-color: #ffffff;">
+                <table style="width: 100%; min-width: 900px; table-layout: fixed; border-collapse: collapse; font-size: 14px; background-color: #ffffff;">
                     <colgroup>
-                        <col style="width: 20%;">
+                        <col style="width: 18%;">
+                        <col style="width: 9%;">
                         <col style="width: 10%;">
+                        <col style="width: 8%;">
+                        <col style="width: 11%;">
+                        <col style="width: 12%;">
+                        <col style="width: 12%;">
                         <col style="width: 11%;">
                         <col style="width: 9%;">
-                        <col style="width: 14%;">
-                        <col style="width: 14%;">
-                        <col style="width: 12%;">
-                        <col style="width: 10%;">
                     </colgroup>
                     <thead>
                         <tr style="background-color: #f1f5f9; color: #0f172a; font-weight: 700; height: 38px;">
@@ -608,9 +531,10 @@ def generate_soccer_report(date_str: str):
                             <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">ClubElo</th>
                             <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">預估 xG</th>
                             <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">真實比分</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">正比推薦</th>
                             <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">獨贏推薦</th>
                             <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">讓球推薦</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">大小推薦 (開盤)</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">大小推薦</th>
                             <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">雙進</th>
                         </tr>
                     </thead>
@@ -624,12 +548,10 @@ def generate_soccer_report(date_str: str):
         html_blocks.append(t_block)
     return tot, len(elo_db), "".join(html_blocks)
 
-# ================= 模組二：MLB 美棒量化與實時開盤對齊引擎 =================
 class AutomatedMLBQuantSystem:
     def __init__(self, simulations: int = 10000):
         self.simulations = simulations
         self.fip_constant = 3.15  
-        
         self.park_factors = {
             "Colorado Rockies": 1.14, "Cincinnati Reds": 1.12, "Boston Red Sox": 1.08, 
             "Texas Rangers": 1.05, "Kansas City Royals": 1.04, "Atlanta Braves": 1.03,
@@ -640,23 +562,19 @@ class AutomatedMLBQuantSystem:
             "Toronto Blue Jays": 0.99, "Minnesota Twins": 0.98, "Pittsburgh Pirates": 0.98,
             "San Francisco Giants": 0.98, "Tampa Bay Rays": 0.97, "Detroit Tigers": 0.97,
             "Cleveland Guardians": 0.97, "New York Mets": 0.96, "St. Louis Cardinals": 0.96,
-            "San Diego Padres": 0.95, "Oakland Athletics": 0.94, "Athletics": 0.94, 
-            "Seattle Mariners": 0.91
+            "San Diego Padres": 0.95, "Oakland Athletics": 0.94, "Athletics": 0.94, "Seattle Mariners": 0.91
         }
-        
         self.umpire_factors = {
             "Lance Barksdale": 1.06, "CB Bucknor": 1.05, "Rob Drake": 1.05, "Laz Diaz": 1.04,
             "Brian O'Nora": 1.04, "Mark Ripperger": 1.03, "Dan Iassogna": 1.03,
             "Pat Hoberg": 0.94, "Doug Eddings": 0.94, "John Libka": 0.95, "Bill Miller": 0.95,
             "Dan Bellino": 0.96, "Gabe Morales": 0.96, "Jordan Baker": 0.97
         }
-        
         self.dome_stadiums = [
             "Tampa Bay Rays", "Toronto Blue Jays", "Miami Marlins", 
             "Houston Astros", "Texas Rangers", "Arizona Diamondbacks", 
             "Milwaukee Brewers", "Seattle Mariners"
         ]
-        
         self.team_cities = {
             "New York Yankees": "Bronx", "New York Mets": "Queens", "Los Angeles Dodgers": "Los Angeles",
             "Los Angeles Angels": "Anaheim", "Chicago Cubs": "Chicago", "Chicago White Sox": "Chicago",
@@ -667,7 +585,6 @@ class AutomatedMLBQuantSystem:
             "Minnesota Twins": "Minneapolis", "Cleveland Guardians": "Cleveland", "Pittsburgh Pirates": "Pittsburgh",
             "St. Louis Cardinals": "St. Louis", "Oakland Athletics": "Oakland", "Athletics": "Oakland"
         }
-        
         self.team_cn_names = {
             "New York Yankees": "洋基", "Baltimore Orioles": "金鶯", "Boston Red Sox": "紅襪",
             "Tampa Bay Rays": "光芒", "Toronto Blue Jays": "藍鳥", "Chicago White Sox": "白襪",
@@ -681,7 +598,6 @@ class AutomatedMLBQuantSystem:
             "Colorado Rockies": "落磯", "Los Angeles Dodgers": "道奇", "San Diego Padres": "教士",
             "San Francisco Giants": "巨人"
         }
-
         self.lefty_pitchers = [
             "Tarik Skubal", "Chris Sale", "Blake Snell", "Max Fried", "Cole Ragans", "Garrett Crochet", 
             "Framber Valdez", "Ranger Suarez", "Carlos Rodón", "Shota Imanaga", "Cristopher Sánchez", 
@@ -689,7 +605,6 @@ class AutomatedMLBQuantSystem:
             "Yusei Kikuchi", "Martin Perez", "Jesus Luzardo", "Braxton Garrett", "Trevor Rogers",
             "MacKenzie Gore", "Justin Steele", "Nestor Cortes", "Reid Detmers"
         ]
-        
         self.team_ratings = {
             "Los Angeles Dodgers": {"xwOBA_vs_R": 0.345, "xwOBA_vs_L": 0.335, "bp_siera": 3.30, "team_avg_sp": 3.40},
             "New York Yankees": {"xwOBA_vs_R": 0.335, "xwOBA_vs_L": 0.345, "bp_siera": 3.50, "team_avg_sp": 3.65},
@@ -723,13 +638,11 @@ class AutomatedMLBQuantSystem:
             "Colorado Rockies": {"xwOBA_vs_R": 0.298, "xwOBA_vs_L": 0.285, "bp_siera": 4.85, "team_avg_sp": 5.20},
             "Chicago White Sox": {"xwOBA_vs_R": 0.288, "xwOBA_vs_L": 0.278, "bp_siera": 4.75, "team_avg_sp": 4.95}
         }
-        
         self.re24_matrix = {
             0: {"Empty": 0.48, "1B": 0.86, "2B": 1.10, "3B": 1.35, "12B": 1.44, "13B": 1.70, "23B": 1.96, "Loaded": 2.28},
             1: {"Empty": 0.25, "1B": 0.51, "2B": 0.67, "3B": 0.95, "12B": 0.93, "13B": 1.14, "23B": 1.38, "Loaded": 1.54},
             2: {"Empty": 0.10, "1B": 0.22, "2B": 0.32, "3B": 0.36, "12B": 0.44, "13B": 0.48, "23B": 0.58, "Loaded": 0.75}
         }
-        
         self.fatigue_db = {}
 
     def generate_negative_binomial_runs(self, expected_runs, size):
@@ -750,11 +663,7 @@ class AutomatedMLBQuantSystem:
             res = requests.get(url, timeout=3).json()
             temp_f = int(res['current_condition'][0]['temp_F'])
             wind_mph = int(res['current_condition'][0]['windspeedMiles'])
-            temp_effect = (temp_f - 72) * 0.003
-            wind_effect = (wind_mph / 10) * 0.015 
-            multiplier = 1.0 + temp_effect + wind_effect
-            desc = f"{temp_f}°F, 風 {wind_mph}mph"
-            return round(multiplier, 3), desc
+            return round(1.0 + ((temp_f - 72) * 0.003) + ((wind_mph / 10) * 0.015), 3), f"{temp_f}°F, 風 {wind_mph}mph"
         except Exception:
             return 1.0, "天氣預設 (無數據)"
 
@@ -762,20 +671,13 @@ class AutomatedMLBQuantSystem:
         try:
             target_date = datetime.strptime(target_date_str, "%Y-%m-%d")
             yesterday_str = (target_date - timedelta(days=1)).strftime("%Y-%m-%d")
-            url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={yesterday_str}&hydrate=boxscore"
-            res = requests.get(url, timeout=4).json()
+            res = requests.get(f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={yesterday_str}&hydrate=boxscore", timeout=4).json()
             for d in res.get("dates", []):
                 for game in d.get("games", []):
                     for side in ["away", "home"]:
                         team_name = game["teams"][side]["team"]["name"]
                         boxscore = game.get("boxscore", {}).get("teams", {}).get(side, {})
-                        pitchers = boxscore.get("pitchers", [])
-                        total_bp_pitches = 0
-                        if len(pitchers) > 1:
-                            for pid in pitchers[1:]:
-                                p_stats = boxscore.get("players", {}).get(f"ID{pid}", {}).get("stats", {}).get("pitching", {})
-                                total_bp_pitches += p_stats.get("numberOfPitches", 0)
-                        
+                        total_bp_pitches = sum([boxscore.get("players", {}).get(f"ID{pid}", {}).get("stats", {}).get("pitching", {}).get("numberOfPitches", 0) for pid in boxscore.get("pitchers", [])[1:]])
                         if total_bp_pitches > 75:
                             self.fatigue_db[team_name] = {"multiplier": 1.15, "desc": f"🔴嚴重消耗({total_bp_pitches}球)"}
                         elif total_bp_pitches > 45:
@@ -787,26 +689,18 @@ class AutomatedMLBQuantSystem:
 
     def calculate_live_fip(self, pitcher_id: int):
         if not pitcher_id: return None
-        url = f"https://statsapi.mlb.com/api/v1/people/{pitcher_id}?hydrate=stats(group=[pitching],type=[season])"
         try:
-            res = requests.get(url, timeout=4).json()
-            stats_groups = res.get("people", [{}])[0].get("stats", [])
-            for group in stats_groups:
+            res = requests.get(f"https://statsapi.mlb.com/api/v1/people/{pitcher_id}?hydrate=stats(group=[pitching],type=[season])", timeout=4).json()
+            for group in res.get("people", [{}])[0].get("stats", []):
                 if group.get("type", {}).get("displayName") == "season":
                     splits = group.get("splits", [])
                     if splits:
                         stat = splits[0].get("stat", {})
                         ip_str = str(stat.get("inningsPitched", "0"))
-                        if "." in ip_str:
-                            full, part = ip_str.split(".")
-                            ip = float(full) + (float(part) / 3.0)
-                        else:
-                            ip = float(ip_str)
-                            
+                        ip = float(ip_str.split(".")[0]) + (float(ip_str.split(".")[1]) / 3.0) if "." in ip_str else float(ip_str)
                         if ip < 15.0: return None 
                         hr, bb, hbp, k = int(stat.get("homeRuns", 0)), int(stat.get("baseOnBalls", 0)), int(stat.get("hitByPitch", 0)), int(stat.get("strikeOuts", 0))
-                        fip = ((13 * hr) + (3 * (bb + hbp)) - (2 * k)) / ip + self.fip_constant
-                        return round(fip, 2)
+                        return round(((13 * hr) + (3 * (bb + hbp)) - (2 * k)) / ip + self.fip_constant, 2)
         except Exception:
             pass
         return None
@@ -815,7 +709,6 @@ class AutomatedMLBQuantSystem:
         data = self.team_ratings.get(team_name, {"xwOBA_vs_R": 0.315, "xwOBA_vs_L": 0.315, "bp_siera": 4.00, "team_avg_sp": 4.20}).copy()
         live_fip = self.calculate_live_fip(pitcher_id)
         data["sp_advanced"] = live_fip if live_fip else min(data.get("team_avg_sp", 4.20) + 0.30, 5.50)
-        
         fatigue_info = self.fatigue_db.get(team_name, {"multiplier": 1.00, "desc": "🟢健康(無資料)"})
         data["bp_siera_real"] = data["bp_siera"] * fatigue_info["multiplier"]
         data["fatigue_desc"] = fatigue_info["desc"]
@@ -824,48 +717,31 @@ class AutomatedMLBQuantSystem:
 
     def fetch_espn_mlb_odds(self, date_str: str):
         target_dt = datetime.strptime(date_str, "%Y-%m-%d")
-        dates_to_query = [
-            (target_dt - timedelta(days=1)).strftime("%Y%m%d"),
-            target_dt.strftime("%Y%m%d"),
-            (target_dt + timedelta(days=1)).strftime("%Y%m%d")
-        ]
-        
+        dates_to_query = [(target_dt - timedelta(days=1)).strftime("%Y%m%d"), target_dt.strftime("%Y%m%d"), (target_dt + timedelta(days=1)).strftime("%Y%m%d")]
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         odds_dict = {}
-        
-        def parse_odds(res_json):
-            for event in res_json.get("events", []):
-                comp = event.get("competitions", [{}])[0]
-                odds_list = comp.get("odds", [])
-                if odds_list:
-                    ou = odds_list[0].get("overUnder", None)
-                    if ou:
-                        h_name, a_name = "", ""
-                        for c in comp.get("competitors", []):
-                            if c.get("homeAway") == "home":
-                                h_name = c.get("team", {}).get("displayName", "")
-                            else:
-                                a_name = c.get("team", {}).get("displayName", "")
-                        if h_name and a_name:
-                            odds_dict[(a_name, h_name)] = float(ou)
-
         for d_str in dates_to_query:
-            url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={d_str}"
             try:
-                res = requests.get(url, headers=headers, timeout=5).json()
-                parse_odds(res)
+                res = requests.get(f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={d_str}", headers=headers, timeout=5).json()
+                for event in res.get("events", []):
+                    comp = event.get("competitions", [{}])[0]
+                    odds_list = comp.get("odds", [])
+                    if odds_list:
+                        ou = odds_list[0].get("overUnder", None)
+                        if ou:
+                            h_name, a_name = "", ""
+                            for c in comp.get("competitors", []):
+                                if c.get("homeAway") == "home": h_name = c.get("team", {}).get("displayName", "")
+                                else: a_name = c.get("team", {}).get("displayName", "")
+                            if h_name and a_name: odds_dict[(a_name, h_name)] = float(ou)
             except Exception:
                 pass
         return odds_dict
 
     def get_games_and_scores(self, date_str: str):
         target_dt = datetime.strptime(date_str, "%Y-%m-%d")
-        range_start = (target_dt - timedelta(days=1)).strftime('%Y-%m-%d')
-        range_end = (target_dt + timedelta(days=1)).strftime('%Y-%m-%d')
-        
-        url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={range_start}&endDate={range_end}&hydrate=probablePitcher,linescore,officials"
         try:
-            res = requests.get(url, timeout=5).json()
+            res = requests.get(f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={(target_dt - timedelta(days=1)).strftime('%Y-%m-%d')}&endDate={(target_dt + timedelta(days=1)).strftime('%Y-%m-%d')}&hydrate=probablePitcher,linescore,officials", timeout=5).json()
         except Exception:
             return pd.DataFrame()
         
@@ -875,35 +751,22 @@ class AutomatedMLBQuantSystem:
                 game_date_utc = game.get("gameDate", "")
                 if game_date_utc:
                     try:
-                        dt_tw = pd.to_datetime(game_date_utc).tz_convert('Asia/Taipei')
-                        if dt_tw.strftime("%Y-%m-%d") != date_str:
+                        if pd.to_datetime(game_date_utc).tz_convert('Asia/Taipei').strftime("%Y-%m-%d") != date_str:
                             continue
                     except Exception:
                         if date_str not in d.get("date", ""):
                             continue
-                            
                 status = game.get("status", {}).get("abstractGameState", "Preview")
-                api_state = "pre" if status in ["Preview", "Pre-Game"] else ("Final" if status == "Final" else "Live")
-                away_score = game["teams"]["away"].get("score", None)
-                home_score = game["teams"]["home"].get("score", None)
-                
-                away_team = game["teams"]["away"]["team"]["name"]
-                home_team = game["teams"]["home"]["team"]["name"]
-                
-                away_sp_info = game["teams"]["away"].get("probablePitcher", {})
-                home_sp_info = game["teams"]["home"].get("probablePitcher", {})
-                
                 umpire_name = "未公布 (TBD)"
-                officials = game.get("officials", [])
-                for official in officials:
+                for official in game.get("officials", []):
                     if official.get("officialType") == "Home Plate":
                         umpire_name = official.get("official", {}).get("fullName", "未公布")
                         break
-                        
                 games.append({
-                    "away_team": away_team, "away_sp": away_sp_info.get("fullName", "TBD"), "away_sp_id": away_sp_info.get("id", None),
-                    "home_team": home_team, "home_sp": home_sp_info.get("fullName", "TBD"), "home_sp_id": home_sp_info.get("id", None),
-                    "status": status, "api_state": api_state, "away_score": away_score, "home_score": home_score, "umpire": umpire_name
+                    "away_team": game["teams"]["away"]["team"]["name"], "away_sp": game["teams"]["away"].get("probablePitcher", {}).get("fullName", "TBD"), "away_sp_id": game["teams"]["away"].get("probablePitcher", {}).get("id", None),
+                    "home_team": game["teams"]["home"]["team"]["name"], "home_sp": game["teams"]["home"].get("probablePitcher", {}).get("fullName", "TBD"), "home_sp_id": game["teams"]["home"].get("probablePitcher", {}).get("id", None),
+                    "status": status, "api_state": "pre" if status in ["Preview", "Pre-Game"] else ("Final" if status == "Final" else "Live"),
+                    "away_score": game["teams"]["away"].get("score", None), "home_score": game["teams"]["home"].get("score", None), "umpire": umpire_name
                 })
         return pd.DataFrame(games)
 
@@ -918,146 +781,68 @@ class AutomatedMLBQuantSystem:
         for _, row in df_games.iterrows():
             away_data = self.fetch_metrics(row["away_team"], row["away_sp"], row["away_sp_id"])
             home_data = self.fetch_metrics(row["home_team"], row["home_sp"], row["home_sp_id"])
-            
             away_cn = self.team_cn_names.get(row["away_team"], row["away_team"])
             home_cn = self.team_cn_names.get(row["home_team"], row["home_team"])
             
-            hfa = 1.03 
-            unearned_run_multiplier = 1.05 
-            park_factor = self.park_factors.get(row["home_team"], 1.00) 
             weather_multiplier, weather_desc = self.get_weather_data(row["home_team"])
+            ump_factor = self.umpire_factors.get(row["umpire"], 1.00)
+            umpire_display = f"{row['umpire']}<br><span style='color:#e91e63; font-size:12px;'>(係數 {ump_factor:.2f})</span>"
             
-            umpire = row["umpire"]
-            ump_factor = self.umpire_factors.get(umpire, 1.00)
-            umpire_display = f"{umpire}<br><span style='color:#e91e63; font-size:12px;'>(係數 {ump_factor:.2f})</span>"
+            lambda_home = ((away_data["sp_advanced"] / 9.0) * 5.1 + (away_data["bp_siera_real"] / 9.0) * 3.9) * ((home_data["xwOBA_vs_L" if away_data["hand"] == "LHP" else "xwOBA_vs_R"] / 0.315) ** 2.5) * self.park_factors.get(row["home_team"], 1.00) * weather_multiplier * ump_factor * 1.03 * 1.05
+            lambda_away = ((home_data["sp_advanced"] / 9.0) * 5.1 + (home_data["bp_siera_real"] / 9.0) * 3.9) * ((away_data["xwOBA_vs_L" if home_data["hand"] == "LHP" else "xwOBA_vs_R"] / 0.315) ** 2.5) * self.park_factors.get(row["home_team"], 1.00) * weather_multiplier * ump_factor * 1.05
             
-            target_xwOBA_home = home_data["xwOBA_vs_L"] if away_data["hand"] == "LHP" else home_data["xwOBA_vs_R"]
-            target_xwOBA_away = away_data["xwOBA_vs_L"] if home_data["hand"] == "LHP" else away_data["xwOBA_vs_R"]
-            
-            firepower_home = (target_xwOBA_home / 0.315) ** 2.5
-            firepower_away = (target_xwOBA_away / 0.315) ** 2.5
-            
-            pitching_base_away = (away_data["sp_advanced"] / 9.0) * 5.1 + (away_data["bp_siera_real"] / 9.0) * 3.9
-            pitching_base_home = (home_data["sp_advanced"] / 9.0) * 5.1 + (home_data["bp_siera_real"] / 9.0) * 3.9
-            
-            lambda_home = pitching_base_away * firepower_home * park_factor * weather_multiplier * ump_factor * hfa * unearned_run_multiplier
-            lambda_away = pitching_base_home * firepower_away * park_factor * weather_multiplier * ump_factor * unearned_run_multiplier
-            
-            api_state = row["api_state"]
             api_ou = espn_odds.get((row["away_team"], row["home_team"]), None)
-            
-            game_market_line = sync_odds("mlb", date_str, row["home_team"], row["away_team"], api_state, api_ou)
-            
+            game_market_line = sync_odds("mlb", date_str, row["home_team"], row["away_team"], row["api_state"], api_ou)
             if not game_market_line:
-                est_tot = lambda_away + lambda_home
-                game_market_line = round(est_tot * 2) / 2.0
-                if game_market_line < 6.5: game_market_line = 7.5
-                if game_market_line > 12.5: game_market_line = 11.5
+                game_market_line = max(7.5, min(11.5, round((lambda_away + lambda_home) * 2) / 2.0))
                 force_update_fallback("mlb", date_str, row["home_team"], row["away_team"], game_market_line)
 
             home_runs = self.generate_negative_binomial_runs(lambda_home, self.simulations)
             away_runs = self.generate_negative_binomial_runs(lambda_away, self.simulations)
             
-            ties = (home_runs == away_runs)
-            tie_home_wins = np.random.binomial(1, 0.54, size=np.sum(ties))
-            total_home_wins = np.sum(home_runs > away_runs) + np.sum(tie_home_wins == 1)
-            home_ml_prob = total_home_wins / self.simulations
-            away_ml_prob = 1.0 - home_ml_prob
-            
+            home_ml_prob = (np.sum(home_runs > away_runs) + np.sum(np.random.binomial(1, 0.54, size=np.sum(home_runs == away_runs)) == 1)) / 10000.0
             run_diff = home_runs - away_runs 
-            home_cover_m15 = np.mean(run_diff > 1.5)      
-            away_cover_p15 = np.mean(run_diff < 1.5)       
-            away_cover_m15 = np.mean(run_diff < -1.5)     
-            home_cover_p15 = np.mean(run_diff > -1.5)      
             
             if home_ml_prob >= 0.5:
-                if home_cover_m15 >= 0.40:
-                    spread_pick = f"{home_cn} 讓-1.5<br>({home_cover_m15*100:.1f}%)"
-                    spread_target = "HOME_M15"
-                else:
-                    spread_pick = f"{away_cn} 受+1.5<br>({away_cover_p15*100:.1f}%)"
-                    spread_target = "AWAY_P15"
+                spread_pick, spread_target = (f"{home_cn} 讓-1.5<br>({np.mean(run_diff > 1.5)*100:.1f}%)", "HOME_M15") if np.mean(run_diff > 1.5) >= 0.40 else (f"{away_cn} 受+1.5<br>({np.mean(run_diff < 1.5)*100:.1f}%)", "AWAY_P15")
+                ml_text, ml_target = f"{home_cn} 主勝<br>({home_ml_prob*100:.1f}%)", "HOME"
             else:
-                if away_cover_m15 >= 0.40:
-                    spread_pick = f"{away_cn} 讓-1.5<br>({away_cover_m15*100:.1f}%)"
-                    spread_target = "AWAY_M15"
-                else:
-                    spread_pick = f"{home_cn} 受+1.5<br>({home_cover_p15*100:.1f}%)"
-                    spread_target = "HOME_P15"
+                spread_pick, spread_target = (f"{away_cn} 讓-1.5<br>({np.mean(run_diff < -1.5)*100:.1f}%)", "AWAY_M15") if np.mean(run_diff < -1.5) >= 0.40 else (f"{home_cn} 受+1.5<br>({np.mean(run_diff > -1.5)*100:.1f}%)", "HOME_P15")
+                ml_text, ml_target = f"{away_cn} 客勝<br>({(1.0 - home_ml_prob)*100:.1f}%)", "AWAY"
 
-            total_runs = home_runs + away_runs
-            over_prob = np.mean(total_runs > game_market_line)
-            under_prob = np.mean(total_runs < game_market_line)
-            
-            if home_ml_prob >= 0.5:
-                model_ml_pick_name = home_cn
-                ml_pick_type = "主勝"
-                ml_target = "HOME"
-            else:
-                model_ml_pick_name = away_cn
-                ml_pick_type = "客勝"
-                ml_target = "AWAY"
-                
-            model_ou_pick = "大分" if over_prob >= under_prob else "小分"
-            
-            ml_text = f"{model_ml_pick_name} {ml_pick_type}<br>({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
-            ou_text = f"{model_ou_pick} {game_market_line}<br>({max(over_prob, under_prob)*100:.1f}%)"
+            over_p = np.mean((home_runs + away_runs) > game_market_line)
+            model_ou_pick = "大分" if over_p >= np.mean((home_runs + away_runs) < game_market_line) else "小分"
+            ou_text = f"{model_ou_pick} {game_market_line}<br>({max(over_p, 1.0 - over_p)*100:.1f}%)"
             
             cell_base = "padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; word-break: break-word;"
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             ou_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             
-            is_final = (row["status"] == "Final" and row["home_score"] is not None and row["away_score"] is not None)
-            if is_final:
-                h_act = int(row["home_score"])
-                a_act = int(row["away_score"])
+            if row["status"] == "Final" and row["home_score"] is not None and row["away_score"] is not None:
+                h_act, a_act = int(row["home_score"]), int(row["away_score"])
                 actual_score_str = f"{a_act} : {h_act}"
+                ml_style += "background-color: #dcfce7; color: #15803d;" if ml_target == ("HOME" if h_act > a_act else "AWAY") else "background-color: #fee2e2; color: #b91c1c;"
                 
-                # 1. 獨贏命中判定
-                actual_ml_target = "HOME" if h_act > a_act else ("AWAY" if a_act > h_act else "DRAW")
-                ml_style += "background-color: #dcfce7; color: #15803d;" if ml_target == actual_ml_target else "background-color: #fee2e2; color: #b91c1c;"
+                # 徹底修復 MLB 主客讓分上色邏輯
+                if spread_target == "HOME_M15": hit_spread = (h_act - a_act > 1.5)
+                elif spread_target == "HOME_P15": hit_spread = (h_act - a_act > -1.5)
+                elif spread_target == "AWAY_M15": hit_spread = (a_act - h_act > 1.5)
+                else: hit_spread = (a_act - h_act > -1.5)
                 
-                # 2. 讓分命中判定 (徹底修復客隊讓分未著色問題)
-                if spread_target in ["HOME_M15", "HOME_P15"]:
-                    # 推薦主隊
-                    if "讓-1.5" in spread_pick:
-                        is_spread_hit = (h_act - a_act > 1.5)
-                    else:
-                        is_spread_hit = (h_act - a_act > -1.5)
-                else:
-                    # 推薦客隊
-                    if "讓-1.5" in spread_pick:
-                        is_spread_hit = (a_act - h_act > 1.5)
-                    else:
-                        is_spread_hit = (a_act - h_act > -1.5)
-                        
-                spread_style += "background-color: #dcfce7; color: #15803d;" if is_spread_hit else "background-color: #fee2e2; color: #b91c1c;"
+                spread_style += "background-color: #dcfce7; color: #15803d;" if hit_spread else "background-color: #fee2e2; color: #b91c1c;"
 
-                # 3. 大小分命中判定
                 actual_total = h_act + a_act
-                if actual_total == game_market_line:
-                    ou_style += "background-color: #fef9c3; color: #854d0e;" 
-                elif (actual_total > game_market_line and model_ou_pick == "大分") or (actual_total < game_market_line and model_ou_pick == "小分"):
-                    ou_style += "background-color: #dcfce7; color: #15803d;" 
-                else:
-                    ou_style += "background-color: #fee2e2; color: #b91c1c;" 
+                if actual_total == game_market_line: ou_style += "background-color: #fef9c3; color: #854d0e;"
+                elif (actual_total > game_market_line and model_ou_pick == "大分") or (actual_total < game_market_line and model_ou_pick == "小分"): ou_style += "background-color: #dcfce7; color: #15803d;"
+                else: ou_style += "background-color: #fee2e2; color: #b91c1c;"
             else:
                 actual_score_str = "未完賽"
 
-            sp_text_away = f"{row['away_sp']}<br><span style='color: #475569; font-size:12px;'>({away_data['hand']} | FIP {away_data['sp_advanced']:.2f})</span>" if row['away_sp'] != "TBD" else "TBD"
-            sp_text_home = f"{row['home_sp']}<br><span style='color: #475569; font-size:12px;'>({home_data['hand']} | FIP {home_data['sp_advanced']:.2f})</span>" if row['home_sp'] != "TBD" else "TBD"
-
-            bp_text_away = f"<span style='font-size:12.5px; color: #0f172a;'>{away_data['fatigue_desc']}</span>"
-            bp_text_home = f"<span style='font-size:12.5px; color: #0f172a;'>{home_data['fatigue_desc']}</span>"
-
             row_html = f'''<tr>
-                <td style="{cell_base} font-weight: bold; font-size: 15px; color: #0f172a;">
-                    <span style="color:#64748b; font-size:12px;">(客)</span> {away_cn}<br>
-                    <span style="color:#64748b; font-size:12px;">(主)</span> {home_cn}
-                </td>
-                <td style="{cell_base} font-size: 13px; color: #0f172a;">{sp_text_away}<br>vs<br>{sp_text_home}</td>
-                <td style="{cell_base}">{bp_text_away}<br>{bp_text_home}</td>
+                <td style="{cell_base} font-weight: bold; font-size: 15px; color: #0f172a;"><span style="color:#64748b; font-size:12px;">(客)</span> {away_cn}<br><span style="color:#64748b; font-size:12px;">(主)</span> {home_cn}</td>
+                <td style="{cell_base} font-size: 13px; color: #0f172a;">{row['away_sp']}<br><span style='color: #475569; font-size:12px;'>({away_data['hand']} | FIP {away_data['sp_advanced']:.2f})</span><br>vs<br>{row['home_sp']}<br><span style='color: #475569; font-size:12px;'>({home_data['hand']} | FIP {home_data['sp_advanced']:.2f})</span></td>
+                <td style="{cell_base}"><span style='font-size:12.5px; color: #0f172a;'>{away_data['fatigue_desc']}</span><br><span style='font-size:12.5px; color: #0f172a;'>{home_data['fatigue_desc']}</span></td>
                 <td style="{cell_base} font-size: 13px; color: #0f172a;">{umpire_display}</td>
                 <td style="{cell_base} font-size: 13px; color: #0284c7;">{weather_desc}</td>
                 <td style="{cell_base} color: #e11d48; font-weight: bold; font-size: 14.5px;">{lambda_away:.2f} : {lambda_home:.2f}</td>
@@ -1068,7 +853,6 @@ class AutomatedMLBQuantSystem:
             </tr>'''
             rows_html.append(row_html)
             
-        # MLB 表格：加入 table-layout: fixed 與 colgroup 欄位鎖定
         table_html = f'''
         <div style="margin-bottom: 20px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
             <div style="background: linear-gradient(90deg, #1e3a8a, #0369a1); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 14px; font-weight: bold;">
@@ -1077,16 +861,7 @@ class AutomatedMLBQuantSystem:
             <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;">
                 <table style="width: 100%; min-width: 950px; table-layout: fixed; border-collapse: collapse; font-size: 14px; background-color: #ffffff;">
                     <colgroup>
-                        <col style="width: 12%;">
-                        <col style="width: 14%;">
-                        <col style="width: 10%;">
-                        <col style="width: 10%;">
-                        <col style="width: 9%;">
-                        <col style="width: 9%;">
-                        <col style="width: 8%;">
-                        <col style="width: 10%;">
-                        <col style="width: 10%;">
-                        <col style="width: 8%;">
+                        <col style="width: 12%;"><col style="width: 14%;"><col style="width: 10%;"><col style="width: 10%;"><col style="width: 9%;"><col style="width: 9%;"><col style="width: 8%;"><col style="width: 10%;"><col style="width: 10%;"><col style="width: 8%;">
                     </colgroup>
                     <thead>
                         <tr style="background-color: #f1f5f9; text-align: center; color: #0f172a; font-weight: bold; height: 38px;">
@@ -1113,215 +888,120 @@ class AutomatedMLBQuantSystem:
 
 @st.cache_data(ttl=900, show_spinner=False)
 def generate_mlb_report_cached(date_str: str):
-    mlb_sys = AutomatedMLBQuantSystem(simulations=10000)
-    return mlb_sys.run_daily_pipeline(date_str)
+    return AutomatedMLBQuantSystem(simulations=10000).run_daily_pipeline(date_str)
 
-# ================= 介面視圖 =================
 def login_view():
     apply_branding_css()
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         render_brand_header()
         st.caption("請輸入會員通行碼以解鎖今日數據分析：")
-        
-        if auth_msg:
-            st.error(auth_msg)
-            
+        if auth_msg: st.error(auth_msg)
         passcode = st.text_input("通行碼", type="password", placeholder="請輸入專屬通行碼")
-        
         if st.button("確認進入", use_container_width=True, type="primary"):
             ok, msg = try_authenticate(passcode)
-            if ok:
-                st.success(msg)
-                st.rerun()
-            else:
-                st.error(msg)
+            if ok: st.success(msg); st.rerun()
+            else: st.error(msg)
 
 def render_soccer_inplay_calculator():
     st.markdown("#### ⚡ 歐洲頂級足球走地公允定價試算器")
     st.caption("依據五大聯賽各隊即時時間衰減、落後追分強度與少打一人懲罰模型，秒出滾球公允賠率與進場訊號。")
-    
     dropdown_labels = list(SOCCER_INPLAY_DROPDOWN.keys())
-    default_h_idx = dropdown_labels.index("【足球】皇家馬德里 (Real Madrid)") if "【足球】皇家馬德里 (Real Madrid)" in dropdown_labels else 0
-    default_a_idx = dropdown_labels.index("【足球】巴塞隆納 (Barcelona)") if "【足球】巴塞隆納 (Barcelona)" in dropdown_labels else 1
-
     col1, col2 = st.columns(2)
     with col1:
-        home_choice = st.selectbox("選擇主隊 (Home Team)", dropdown_labels, index=default_h_idx)
+        home_choice = st.selectbox("選擇主隊 (Home Team)", dropdown_labels, index=0)
         home_team = SOCCER_INPLAY_DROPDOWN[home_choice]
         curr_home_score = st.number_input(f"{home_choice} 當前進球數", min_value=0, max_value=15, value=0)
         home_red_cards = st.number_input(f"{home_choice} 紅牌數", min_value=0, max_value=3, value=0)
     with col2:
-        away_choice = st.selectbox("選擇客隊 (Away Team)", dropdown_labels, index=default_a_idx)
+        away_choice = st.selectbox("選擇客隊 (Away Team)", dropdown_labels, index=1)
         away_team = SOCCER_INPLAY_DROPDOWN[away_choice]
         curr_away_score = st.number_input(f"{away_choice} 當前進球數", min_value=0, max_value=15, value=0)
         away_red_cards = st.number_input(f"{away_choice} 紅牌數", min_value=0, max_value=3, value=0)
         
     c_time, c_line = st.columns(2)
-    with c_time:
-        minute = st.slider("當前比賽進行分鐘數 (Minute)", min_value=1, max_value=90, value=65)
-    with c_line:
-        live_ou_line = st.number_input("莊家目前開出之走地大小盤口", min_value=0.5, max_value=12.5, value=float(curr_home_score + curr_away_score) + 1.5, step=0.5)
+    with c_time: minute = st.slider("當前比賽進行分鐘數 (Minute)", min_value=1, max_value=90, value=65)
+    with c_line: live_ou_line = st.number_input("莊家目前開出之走地大小盤口", min_value=0.5, max_value=12.5, value=float(curr_home_score + curr_away_score) + 1.5, step=0.5)
 
     if st.button("🔥 立即計算走地公允盤口與進場訊號", use_container_width=True, type="primary"):
-        h_elo = BASE_SOCCER_ELO.get(home_team, 1650.0)
-        a_elo = BASE_SOCCER_ELO.get(away_team, 1650.0)
-        diff = h_elo - a_elo
+        diff = BASE_SOCCER_ELO.get(home_team, 1650.0) - BASE_SOCCER_ELO.get(away_team, 1650.0)
+        rem_lh = max(0.4, 1.50 * (1.0 + diff / 550.0) * 1.15) * max(0.02, (90 - minute) / 90.0) * (1.20 if (curr_home_score < curr_away_score and minute >= 60) else 1.0) * max(0.3, 1.0 - home_red_cards * 0.35) * (1.0 + away_red_cards * 0.25)
+        rem_la = max(0.3, 1.20 * (1.0 - diff / 550.0)) * max(0.02, (90 - minute) / 90.0) * (1.20 if (curr_away_score < curr_home_score and minute >= 60) else 1.0) * max(0.3, 1.0 - away_red_cards * 0.35) * (1.0 + home_red_cards * 0.25)
         
-        base_lh = max(0.4, 1.50 * (1.0 + diff / 550.0) * 1.15)
-        base_la = max(0.3, 1.20 * (1.0 - diff / 550.0))
-        
-        time_rem_ratio = max(0.02, (90 - minute) / 90.0)
-        h_trail_boost = 1.20 if (curr_home_score < curr_away_score and minute >= 60) else 1.0
-        a_trail_boost = 1.20 if (curr_away_score < curr_home_score and minute >= 60) else 1.0
-        
-        h_red_pen = max(0.3, 1.0 - home_red_cards * 0.35)
-        a_red_pen = max(0.3, 1.0 - away_red_cards * 0.35)
-        
-        rem_lh = base_lh * time_rem_ratio * h_trail_boost * h_red_pen * (1.0 + away_red_cards * 0.25)
-        rem_la = base_la * time_rem_ratio * a_trail_boost * a_red_pen * (1.0 + home_red_cards * 0.25)
-        
-        rem_hg = np.random.poisson(rem_lh, 10000)
-        rem_ag = np.random.poisson(rem_la, 10000)
-        
-        fin_hg = curr_home_score + rem_hg
-        fin_ag = curr_away_score + rem_ag
+        fin_hg = curr_home_score + np.random.poisson(rem_lh, 10000)
+        fin_ag = curr_away_score + np.random.poisson(rem_la, 10000)
         fin_tot = fin_hg + fin_ag
         
-        hw_p = np.mean(fin_hg > fin_ag)
-        dr_p = np.mean(fin_hg == fin_ag)
-        aw_p = np.mean(fin_hg < fin_ag)
-        
-        over_p = np.mean(fin_tot > live_ou_line)
-        under_p = np.mean(fin_tot < live_ou_line)
-        
-        h_cn = SOCCER_CN.get(home_team, home_team)
-        a_cn = SOCCER_CN.get(away_team, away_team)
+        hw_p, dr_p, aw_p = np.mean(fin_hg > fin_ag), np.mean(fin_hg == fin_ag), np.mean(fin_hg < fin_ag)
+        over_p, under_p = np.mean(fin_tot > live_ou_line), np.mean(fin_tot < live_ou_line)
         
         st.markdown("---")
         st.markdown("##### 📊 走地公允勝率與理論賠率")
         res1, res2, res3, res4 = st.columns(4)
-        with res1:
-            fair_hw = 1.0 / max(0.01, hw_p)
-            st.metric(label=f"主勝 ({h_cn})", value=f"{hw_p*100:.1f}%", delta=f"公允賠率 {fair_hw:.2f}")
-        with res2:
-            fair_dr = 1.0 / max(0.01, dr_p)
-            st.metric(label="和局 (Draw)", value=f"{dr_p*100:.1f}%", delta=f"公允賠率 {fair_dr:.2f}")
-        with res3:
-            fair_aw = 1.0 / max(0.01, aw_p)
-            st.metric(label=f"客勝 ({a_cn})", value=f"{aw_p*100:.1f}%", delta=f"公允賠率 {fair_aw:.2f}")
-        with res4:
-            st.metric(label=f"剩餘時間期望進球", value=f"{rem_lh + rem_la:.2f} 球", delta=f"主 {rem_lh:.2f} : 客 {rem_la:.2f}")
+        with res1: st.metric(label=f"主勝 ({SOCCER_CN.get(home_team, home_team)})", value=f"{hw_p*100:.1f}%", delta=f"公允賠率 {1.0/max(0.01, hw_p):.2f}")
+        with res2: st.metric(label="和局 (Draw)", value=f"{dr_p*100:.1f}%", delta=f"公允賠率 {1.0/max(0.01, dr_p):.2f}")
+        with res3: st.metric(label=f"客勝 ({SOCCER_CN.get(away_team, away_team)})", value=f"{aw_p*100:.1f}%", delta=f"公允賠率 {1.0/max(0.01, aw_p):.2f}")
+        with res4: st.metric(label="剩餘時間期望進球", value=f"{rem_lh + rem_la:.2f} 球", delta=f"主 {rem_lh:.2f} : 客 {rem_la:.2f}")
 
         st.markdown(f"##### 🎯 走地大小盤口 ({live_ou_line}) 價值判定")
-        if over_p >= 0.55:
-            st.success(f"🔥 **【正期望值訊號】推薦進場：大 {live_ou_line}** ｜ 模型勝率：**{over_p*100:.1f}%** (公允賠率 {1/over_p:.2f})")
-        elif under_p >= 0.55:
-            st.success(f"🛡️ **【正期望值訊號】推薦進場：小 {live_ou_line}** ｜ 模型勝率：**{under_p*100:.1f}%** (公允賠率 {1/under_p:.2f})")
-        else:
-            st.warning(f"⚖️ 盤口處於膠著平衡區間：大 {live_ou_line} ({over_p*100:.1f}%) vs 小 {live_ou_line} ({under_p*100:.1f}%)，建議觀望或等水升。")
+        if over_p >= 0.55: st.success(f"🔥 **【正期望值訊號】推薦進場：大 {live_ou_line}** ｜ 模型勝率：**{over_p*100:.1f}%**")
+        elif under_p >= 0.55: st.success(f"🛡️ **【正期望值訊號】推薦進場：小 {live_ou_line}** ｜ 模型勝率：**{under_p*100:.1f}%**")
+        else: st.warning(f"⚖️ 盤口膠著：大 ({over_p*100:.1f}%) vs 小 ({under_p*100:.1f}%)")
 
 def render_mlb_inplay_calculator():
     st.markdown("#### ⚡ MLB 美棒即時走地公允定價試算器 (RE24 矩陣)")
     st.caption("結合 FanGraphs 權威 RE24 出局數得分期望矩陣與後援投手負二項分佈，秒算半局得分率與全場勝率。")
-    
     mlb_sys = AutomatedMLBQuantSystem(simulations=10000)
-    
     mlb_dropdown_map = {f"【美棒】{v} ({k.split()[-1]})": k for k, v in mlb_sys.team_cn_names.items()}
     mlb_labels = list(mlb_dropdown_map.keys())
     
-    default_h_idx = next((i for i, l in enumerate(mlb_labels) if "道奇" in l), 0)
-    default_a_idx = next((i for i, l in enumerate(mlb_labels) if "洋基" in l), 1)
-
     col1, col2 = st.columns(2)
     with col1:
-        away_choice = st.selectbox("客隊 (Away Team)", mlb_labels, index=default_a_idx)
+        away_choice = st.selectbox("客隊 (Away Team)", mlb_labels, index=1)
         away_team = mlb_dropdown_map[away_choice]
         curr_away_runs = st.number_input(f"{away_choice} 當前得分", min_value=0, max_value=30, value=2)
     with col2:
-        home_choice = st.selectbox("主隊 (Home Team)", mlb_labels, index=default_h_idx)
+        home_choice = st.selectbox("主隊 (Home Team)", mlb_labels, index=0)
         home_team = mlb_dropdown_map[home_choice]
         curr_home_runs = st.number_input(f"{home_choice} 當前得分", min_value=0, max_value=30, value=3)
 
     c_inn, c_half, c_out = st.columns(3)
-    with c_inn:
-        inning = st.slider("當前局數 (Inning)", min_value=1, max_value=12, value=7)
-    with c_half:
-        half_inn = st.radio("半局", ["上半局 (Top)", "下半局 (Bottom)"], horizontal=True)
-    with c_out:
-        outs = st.selectbox("出局數 (Outs)", [0, 1, 2], index=1)
+    with c_inn: inning = st.slider("當前局數 (Inning)", min_value=1, max_value=12, value=7)
+    with c_half: half_inn = st.radio("半局", ["上半局 (Top)", "下半局 (Bottom)"], horizontal=True)
+    with c_out: outs = st.selectbox("出局數 (Outs)", [0, 1, 2], index=1)
         
-    base_state = st.selectbox(
-        "壘包狀態 (Runners on Base)",
-        ["Empty (無人在壘)", "1B (一壘有人)", "2B (二壘有人)", "3B (三壘有人)", 
-         "12B (一二壘有人)", "13B (一三壘有人)", "23B (二三壘有人)", "Loaded (滿壘)"],
-        index=4
-    )
-    base_key = base_state.split(" ")[0]
-
+    base_state = st.selectbox("壘包狀態 (Runners on Base)", ["Empty (無人在壘)", "1B (一壘有人)", "2B (二壘有人)", "3B (三壘有人)", "12B (一二壘有人)", "13B (一三壘有人)", "23B (二三壘有人)", "Loaded (滿壘)"], index=4)
     live_ou_line = st.number_input("莊家目前開出之 MLB 走地大小盤口", min_value=1.5, max_value=25.5, value=float(curr_away_runs + curr_home_runs) + 2.5, step=0.5)
 
     if st.button("🔥 立即計算 MLB 走地勝率與半局得分率", use_container_width=True, type="primary"):
-        curr_half_exp = mlb_sys.re24_matrix[outs].get(base_key, 0.50)
-        
+        curr_half_exp = mlb_sys.re24_matrix[outs].get(base_state.split(" ")[0], 0.50)
         is_top = ("Top" in half_inn)
-        rem_away_inn = max(0, 9 - inning + (0 if is_top else 0))
-        rem_home_inn = max(0, 9 - inning + (1 if is_top else 0))
+        rem_away_exp = (curr_half_exp + (max(0, 9 - inning) - 1) * 0.45) if is_top else (max(0, 9 - inning) * 0.45)
+        rem_home_exp = (max(0, 9 - inning + 1) * 0.45) if is_top else (curr_half_exp + (max(0, 9 - inning + 1) - 1) * 0.45)
         
-        away_data = mlb_sys.team_ratings.get(away_team, {"xwOBA_vs_R": 0.315, "bp_siera": 4.0})
-        home_data = mlb_sys.team_ratings.get(home_team, {"xwOBA_vs_R": 0.315, "bp_siera": 4.0})
-        
-        away_inn_rate = (away_data["xwOBA_vs_R"] / 0.315) * (home_data["bp_siera"] / 9.0) * 1.05
-        home_inn_rate = (home_data["xwOBA_vs_R"] / 0.315) * (away_data["bp_siera"] / 9.0) * 1.08
-        
-        if is_top:
-            rem_away_exp = curr_half_exp + (rem_away_inn - 1) * away_inn_rate
-            rem_home_exp = rem_home_inn * home_inn_rate
-        else:
-            rem_away_exp = rem_away_inn * away_inn_rate
-            rem_home_exp = curr_half_exp + (rem_home_inn - 1) * home_inn_rate
-            
         away_sim = curr_away_runs + mlb_sys.generate_negative_binomial_runs(rem_away_exp, 10000)
         home_sim = curr_home_runs + mlb_sys.generate_negative_binomial_runs(rem_home_exp, 10000)
         tot_sim = away_sim + home_sim
         
-        ties = (away_sim == home_sim)
-        tie_wins = np.random.binomial(1, 0.54, size=np.sum(ties))
-        h_win_p = (np.sum(home_sim > away_sim) + np.sum(tie_wins == 1)) / 10000.0
-        a_win_p = 1.0 - h_win_p
-        
+        h_win_p = (np.sum(home_sim > away_sim) + np.sum(np.random.binomial(1, 0.54, size=np.sum(away_sim == home_sim)) == 1)) / 10000.0
         over_p = np.mean(tot_sim > live_ou_line)
-        under_p = np.mean(tot_sim < live_ou_line)
-        
-        half_score_prob = min(0.95, curr_half_exp / (curr_half_exp + 0.85))
-        
-        h_cn = mlb_sys.team_cn_names.get(home_team, home_team)
-        a_cn = mlb_sys.team_cn_names.get(away_team, away_team)
         
         st.markdown("---")
         st.markdown("##### ⚾ RE24 當前半局得分預期")
         m1, m2, m3 = st.columns(3)
-        with m1:
-            st.metric(label="當前半局期望得分 (RE24)", value=f"{curr_half_exp:.2f} 分")
-        with m2:
-            st.metric(label="本半局是否得分機率", value=f"{half_score_prob*100:.1f}%")
-        with m3:
-            st.metric(label="全場即時公允總分", value=f"{np.mean(tot_sim):.2f} 分")
+        with m1: st.metric(label="當前半局期望得分 (RE24)", value=f"{curr_half_exp:.2f} 分")
+        with m2: st.metric(label="本半局是否得分機率", value=f"{min(0.95, curr_half_exp / (curr_half_exp + 0.85))*100:.1f}%")
+        with m3: st.metric(label="全場即時公允總分", value=f"{np.mean(tot_sim):.2f} 分")
 
         st.markdown("##### 🏆 即時全場勝率與翻盤公允賠率")
         r1, r2 = st.columns(2)
-        with r1:
-            st.metric(label=f"主勝 ({h_cn})", value=f"{h_win_p*100:.1f}%", delta=f"公允賠率 {1/max(0.01, h_win_p):.2f}")
-        with r2:
-            st.metric(label=f"客勝 ({a_cn})", value=f"{a_win_p*100:.1f}%", delta=f"公允賠率 {1/max(0.01, a_win_p):.2f}")
+        with r1: st.metric(label=f"主勝 ({mlb_sys.team_cn_names.get(home_team, home_team)})", value=f"{h_win_p*100:.1f}%", delta=f"公允賠率 {1/max(0.01, h_win_p):.2f}")
+        with r2: st.metric(label=f"客勝 ({mlb_sys.team_cn_names.get(away_team, away_team)})", value=f"{(1.0 - h_win_p)*100:.1f}%", delta=f"公允賠率 {1/max(0.01, 1.0 - h_win_p):.2f}")
 
         st.markdown(f"##### 🎯 走地大小分 ({live_ou_line}) 價值信號")
-        if over_p >= 0.54:
-            st.success(f"🔥 **【走地大分價值】推薦：大 {live_ou_line}** ｜ 模型勝率：**{over_p*100:.1f}%**")
-        elif under_p >= 0.54:
-            st.success(f"🛡️ **【走地小分價值】推薦：小 {live_ou_line}** ｜ 模型勝率：**{under_p*100:.1f}%**")
-        else:
-            st.info(f"⚖️ 走地盤口公允：大 ({over_p*100:.1f}%) vs 小 ({under_p*100:.1f}%)")
+        if over_p >= 0.54: st.success(f"🔥 **【走地大分價值】推薦：大 {live_ou_line}** ｜ 模型勝率：**{over_p*100:.1f}%**")
+        elif (1.0 - over_p) >= 0.54: st.success(f"🛡️ **【走地小分價值】推薦：小 {live_ou_line}** ｜ 模型勝率：**{(1.0 - over_p)*100:.1f}%**")
+        else: st.info(f"⚖️ 走地盤口公允：大 ({over_p*100:.1f}%) vs 小 ({(1.0 - over_p)*100:.1f}%)")
 
 def dashboard_view():
     apply_branding_css()
@@ -1331,58 +1011,36 @@ def dashboard_view():
         with st.expander("🛠️ **管理員控制台 (VIP 代碼生成與管理)**", expanded=False):
             st.markdown("##### 📌 一鍵生成 VIP 7 天防轉傳專屬代碼")
             col_in, col_gen = st.columns([3, 1])
-            with col_in:
-                new_user = st.text_input("輸入會員暱稱 / LINE 代號", placeholder="例如: TEST1 或 VIP888", label_visibility="collapsed")
+            with col_in: new_user = st.text_input("輸入會員暱稱 / LINE 代號", placeholder="例如: TEST1 或 VIP888", label_visibility="collapsed")
             with col_gen:
                 if st.button("⚡ 生成專屬通行碼", use_container_width=True, type="primary"):
                     if new_user:
                         token = generate_vip_token(new_user)
                         expire_str = (date.today() + timedelta(days=7)).strftime("%Y-%m-%d")
-                        base_url = "https://soccer-quant-vip.streamlit.app"
-                        full_url = f"{base_url}/?vip={token}"
-                        
                         if token not in registry:
-                            registry[token] = {
-                                "user_name": new_user.strip().upper(),
-                                "issue_date": date.today().strftime("%Y-%m-%d"),
-                                "dev_id": "",
-                                "bound_at": "尚未綁定 (發放中)"
-                            }
-                        
+                            registry[token] = {"user_name": new_user.strip().upper(), "issue_date": date.today().strftime("%Y-%m-%d"), "dev_id": "", "bound_at": "尚未綁定 (發放中)"}
                         st.success(f"✅ 生成成功！有效期至 **{expire_str} 23:59**")
                         st.markdown(f"🔑 **會員通行密碼**： `{token}`")
-                        st.markdown(f"🔗 **一鍵免密登入連結**：")
-                        st.code(full_url, language="text")
-                    else:
-                        st.warning("請先輸入會員暱稱！")
+                        st.code(f"https://soccer-quant-vip.streamlit.app/?vip={token}", language="text")
+                    else: st.warning("請先輸入會員暱稱！")
             
             st.markdown("---")
             st.markdown("##### 📱 已發放 / 已綁定 VIP 會員清單總覽")
-            if not registry:
-                st.caption("目前尚無發放或綁定的會員代碼。")
+            if not registry: st.caption("目前尚無發放或綁定的會員代碼。")
             else:
                 for tok, info in list(registry.items()):
                     cu, cd, cb = st.columns([2, 3, 1])
-                    with cu:
-                        st.write(f"👤 **{info['user_name']}**")
-                        st.caption(f"通行碼: `{tok}`")
-                    with cd:
-                        bind_status = "🟢已綁定手機" if info.get("dev_id") else "🟡未綁定 (首次點開將自動鎖定)"
-                        st.caption(f"發放日: {info['issue_date']} | 狀態: {bind_status}")
+                    with cu: st.write(f"👤 **{info['user_name']}**"); st.caption(f"通行碼: `{tok}`")
+                    with cd: st.caption(f"發放日: {info['issue_date']} | 狀態: {'🟢已綁定手機' if info.get('dev_id') else '🟡未綁定'}")
                     with cb:
                         if st.button("🔓 一鍵解綁", key=f"unbind_{tok}", use_container_width=True):
-                            del registry[tok]
-                            st.success(f"已解綁 {info['user_name']}")
-                            st.rerun()
+                            del registry[tok]; st.success(f"已解綁 {info['user_name']}"); st.rerun()
 
     elif st.session_state.get("user_name"):
-        rem = st.session_state.get("days_left", 7)
-        curr_tok = st.session_state.get("current_token", "")
-        st.info(f"✨ 歡迎 VIP 會員 **{st.session_state['user_name']}** ｜ 您的通行碼： `{curr_tok}` ｜ 有效期剩餘： **{rem} 天**")
+        st.info(f"✨ 歡迎 VIP 會員 **{st.session_state['user_name']}** ｜ 您的通行碼： `{st.session_state.get('current_token', '')}` ｜ 有效期剩餘： **{st.session_state.get('days_left', 7)} 天**")
 
     col_t, col_l = st.columns([4, 1])
-    with col_t:
-        st.header("🏆 職業體育雙向量化定價系統")
+    with col_t: st.header("🏆 職業體育雙向量化定價系統")
     with col_l:
         if st.button("登出", use_container_width=True):
             st.session_state["authenticated"] = False
@@ -1399,70 +1057,42 @@ def dashboard_view():
         st.markdown("<br>", unsafe_allow_html=True)
         c_left, c_mid, c_right = st.columns([1, 2, 1])
         with c_mid:
-            selected_sport = st.radio(
-                "切換賽前分析賽事",
-                options=["⚽ 歐洲頂級足球", "⚾ MLB 美棒大聯盟 (V9.0)"],
-                horizontal=True,
-                label_visibility="collapsed"
-            )
-
+            selected_sport = st.radio("切換賽前分析賽事", options=["⚽ 歐洲頂級足球", "⚾ MLB 美棒大聯盟 (V9.0)"], horizontal=True, label_visibility="collapsed")
         st.divider()
 
         if selected_sport == "⚽ 歐洲頂級足球":
             st.subheader("⚽ 歐洲五大聯賽與歐冠量化定價 (尾盤自動鎖死防護)")
-            
             c_d1, c_d2 = st.columns([3, 1])
-            with c_d1:
-                selected_date = st.date_input("選擇足球賽事日期", value=date.today(), key="soccer_date")
+            with c_d1: selected_date = st.date_input("選擇足球賽事日期", value=date.today(), key="soccer_date")
             with c_d2:
-                st.write("")
-                st.write("")
-                if st.button("🔄 強制重抓/清空快取", use_container_width=True):
-                    st.cache_data.clear()
-                    st.rerun()
-                    
+                st.write(""); st.write("")
+                if st.button("🔄 強制重抓/清空快取", use_container_width=True): st.cache_data.clear(); st.rerun()
+            
             date_str = selected_date.strftime("%Y-%m-%d")
-
             if st.button("🔍 獲取足球即時量化與回測報告", use_container_width=True, type="primary"):
                 with st.spinner(f"正在同步 ClubElo 與 ESPN 盤口數據庫 {date_str}..."):
                     count, elo_len, report_html = generate_soccer_report(date_str)
-                    if count == 0:
-                        st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。")
-                    else:
-                        st.success(f"✅ 成功同步 {elo_len} 隊歐洲戰力！已量化分析 {count} 場比賽 (尾盤鎖定生效中)！")
-                        st.markdown(report_html, unsafe_allow_html=True)
+                    if count == 0: st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。")
+                    else: st.success(f"✅ 成功同步 {elo_len} 隊歐洲戰力！已量化分析 {count} 場比賽 (尾盤鎖定生效中)！"); st.markdown(report_html, unsafe_allow_html=True)
 
         else:
             st.subheader("⚾ MLB 美國職棒大聯盟量化定價 (尾盤自動鎖死防護)")
             selected_date = st.date_input("選擇 MLB 賽事日期", value=date.today(), key="mlb_date")
             date_str = selected_date.strftime("%Y-%m-%d")
-
             if st.button("🔍 獲取 MLB 即時量化與回測報告", use_container_width=True, type="primary"):
                 with st.spinner(f"正在抓取先發投手、氣象與開盤數據，啟動 10,000 次量化模擬 {date_str} 賽事..."):
                     count, report_html = generate_mlb_report_cached(date_str)
-                    if count == 0:
-                        st.warning(f"📅 【{date_str}】 當日 MLB「無比賽場次」。")
-                    else:
-                        st.success(f"✅ 成功抓取 {count} 場 MLB 比賽，並完成尾盤追蹤與防護鎖死！")
-                        st.markdown(report_html, unsafe_allow_html=True)
+                    if count == 0: st.warning(f"📅 【{date_str}】 當日 MLB「無比賽場次」。")
+                    else: st.success(f"✅ 成功抓取 {count} 場 MLB 比賽，並完成尾盤追蹤與防護鎖死！"); st.markdown(report_html, unsafe_allow_html=True)
 
     with main_tab2:
         st.markdown("<br>", unsafe_allow_html=True)
         c_left2, c_mid2, c_right2 = st.columns([1, 2, 1])
         with c_mid2:
-            live_sport = st.radio(
-                "選擇走地試算項目",
-                options=["⚽ 歐洲足球走地定價", "⚾ MLB 美棒走地定價 (RE24)"],
-                horizontal=True,
-                label_visibility="collapsed"
-            )
+            live_sport = st.radio("選擇走地試算項目", options=["⚽ 歐洲足球走地定價", "⚾ MLB 美棒走地定價 (RE24)"], horizontal=True, label_visibility="collapsed")
         st.divider()
-        if live_sport == "⚽ 歐洲足球走地定價":
-            render_soccer_inplay_calculator()
-        else:
-            render_mlb_inplay_calculator()
+        if live_sport == "⚽ 歐洲足球走地定價": render_soccer_inplay_calculator()
+        else: render_mlb_inplay_calculator()
 
-if not st.session_state["authenticated"]:
-    login_view()
-else:
-    dashboard_view()
+if not st.session_state["authenticated"]: login_view()
+else: dashboard_view()
