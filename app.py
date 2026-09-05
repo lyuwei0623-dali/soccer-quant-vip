@@ -529,7 +529,9 @@ def generate_soccer_report(date_str: str):
 
             p_btts = f"是<br>({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否<br>({(1-btts_p)*100:.1f}%)"
             
-            cell_base = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
+            # 格子基底樣式：明確支援自動換行與精確垂直居中
+            cell_base = "padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; word-break: break-word;"
+            
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             ou_style = f"{cell_base} color: #0f172a; font-weight: 600;"
@@ -582,23 +584,34 @@ def generate_soccer_report(date_str: str):
             </tr>'''
             rows.append(row_html)
             
+        # 足球表格：加入 table-layout: fixed 與 colgroup 欄位鎖定，保證各聯賽完美對齊
         t_block = f'''
         <div style="margin-bottom: 22px; width: 100%; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
             <div style="background: linear-gradient(90deg, #0f172a, #334155); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 14px; font-weight: bold; display: flex; align-items: center;">
                 {l_name}
             </div>
             <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 14px; background-color: #ffffff;">
+                <table style="width: 100%; min-width: 820px; table-layout: fixed; border-collapse: collapse; font-size: 14px; background-color: #ffffff;">
+                    <colgroup>
+                        <col style="width: 20%;">
+                        <col style="width: 10%;">
+                        <col style="width: 11%;">
+                        <col style="width: 9%;">
+                        <col style="width: 14%;">
+                        <col style="width: 14%;">
+                        <col style="width: 12%;">
+                        <col style="width: 10%;">
+                    </colgroup>
                     <thead>
                         <tr style="background-color: #f1f5f9; color: #0f172a; font-weight: 700; height: 38px;">
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">對戰組合</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">ClubElo</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">預估 xG</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">真實比分</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">獨贏推薦</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">讓球推薦</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">大小推薦 (開盤)</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: nowrap;">雙進</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">對戰組合</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">ClubElo</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">預估 xG</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">真實比分</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">獨贏推薦</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">讓球推薦</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">大小推薦 (開盤)</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">雙進</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -611,7 +624,7 @@ def generate_soccer_report(date_str: str):
         html_blocks.append(t_block)
     return tot, len(elo_db), "".join(html_blocks)
 
-# ================= 模組二：MLB 美棒量化與實時開盤對齊引擎 (原樣維持) =================
+# ================= 模組二：MLB 美棒量化與實時開盤對齊引擎 =================
 class AutomatedMLBQuantSystem:
     def __init__(self, simulations: int = 10000):
         self.simulations = simulations
@@ -990,29 +1003,39 @@ class AutomatedMLBQuantSystem:
             ml_text = f"{model_ml_pick_name} {ml_pick_type}<br>({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
             ou_text = f"{model_ou_pick} {game_market_line}<br>({max(over_prob, under_prob)*100:.1f}%)"
             
-            cell_base = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
+            cell_base = "padding: 8px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; word-break: break-word;"
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             ou_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             
-            is_final = (row["status"] == "Final" and row["home_score"] is not None)
+            is_final = (row["status"] == "Final" and row["home_score"] is not None and row["away_score"] is not None)
             if is_final:
-                actual_score_str = f"{row['away_score']} : {row['home_score']}"
-                actual_ml_target = "HOME" if row["home_score"] > row["away_score"] else "AWAY"
-                actual_total = row["home_score"] + row["away_score"]
-                actual_diff = row["home_score"] - row["away_score"]
+                h_act = int(row["home_score"])
+                a_act = int(row["away_score"])
+                actual_score_str = f"{a_act} : {h_act}"
                 
+                # 1. 獨贏命中判定
+                actual_ml_target = "HOME" if h_act > a_act else ("AWAY" if a_act > h_act else "DRAW")
                 ml_style += "background-color: #dcfce7; color: #15803d;" if ml_target == actual_ml_target else "background-color: #fee2e2; color: #b91c1c;"
-                    
-                if spread_target == "HOME_M15":
-                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff > 1.5 else "background-color: #fee2e2; color: #b91c1c;"
-                elif spread_target == "AWAY_P15":
-                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff < 1.5 else "background-color: #fee2e2; color: #b91c1c;"
-                elif spread_target == "AWAY_M1":
-                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff < -1.5 else "background-color: #fee2e2; color: #b91c1c;"
-                elif spread_target == "HOME_P15":
-                    spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff > -1.5 else "background-color: #fee2e2; color: #b91c1c;"
+                
+                # 2. 讓分命中判定 (徹底修復客隊讓分未著色問題)
+                if spread_target in ["HOME_M15", "HOME_P15"]:
+                    # 推薦主隊
+                    if "讓-1.5" in spread_pick:
+                        is_spread_hit = (h_act - a_act > 1.5)
+                    else:
+                        is_spread_hit = (h_act - a_act > -1.5)
+                else:
+                    # 推薦客隊
+                    if "讓-1.5" in spread_pick:
+                        is_spread_hit = (a_act - h_act > 1.5)
+                    else:
+                        is_spread_hit = (a_act - h_act > -1.5)
+                        
+                spread_style += "background-color: #dcfce7; color: #15803d;" if is_spread_hit else "background-color: #fee2e2; color: #b91c1c;"
 
+                # 3. 大小分命中判定
+                actual_total = h_act + a_act
                 if actual_total == game_market_line:
                     ou_style += "background-color: #fef9c3; color: #854d0e;" 
                 elif (actual_total > game_market_line and model_ou_pick == "大分") or (actual_total < game_market_line and model_ou_pick == "小分"):
@@ -1045,25 +1068,38 @@ class AutomatedMLBQuantSystem:
             </tr>'''
             rows_html.append(row_html)
             
+        # MLB 表格：加入 table-layout: fixed 與 colgroup 欄位鎖定
         table_html = f'''
         <div style="margin-bottom: 20px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
             <div style="background: linear-gradient(90deg, #1e3a8a, #0369a1); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 14px; font-weight: bold;">
                 ⚾ 美國職棒大聯盟 (Major League Baseball)
             </div>
             <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 6px 6px;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 14px; background-color: #ffffff;">
+                <table style="width: 100%; min-width: 950px; table-layout: fixed; border-collapse: collapse; font-size: 14px; background-color: #ffffff;">
+                    <colgroup>
+                        <col style="width: 12%;">
+                        <col style="width: 14%;">
+                        <col style="width: 10%;">
+                        <col style="width: 10%;">
+                        <col style="width: 9%;">
+                        <col style="width: 9%;">
+                        <col style="width: 8%;">
+                        <col style="width: 10%;">
+                        <col style="width: 10%;">
+                        <col style="width: 8%;">
+                    </colgroup>
                     <thead>
                         <tr style="background-color: #f1f5f9; text-align: center; color: #0f172a; font-weight: bold; height: 38px;">
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">對戰組合</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">先發 & 慣用手</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">昨日牛棚狀態</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">本壘板主審</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">天氣與風向</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">預估分(客:主)</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">真實比分</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">獨贏推薦</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">讓分推薦 (±1.5)</th>
-                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle; white-space: nowrap;">大小推薦 (尾盤)</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">對戰組合</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">先發 & 慣用手</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">昨日牛棚狀態</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">本壘板主審</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">天氣與風向</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">預估分(客:主)</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">真實比分</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">獨贏推薦</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">讓分推薦 (±1.5)</th>
+                            <th style="padding: 6px 4px; border: 1px solid #cbd5e1; color: #0f172a; vertical-align: middle;">大小推薦 (尾盤)</th>
                         </tr>
                     </thead>
                     <tbody>
