@@ -8,7 +8,7 @@ import time
 import os
 import base64
 import sqlite3
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 # 1. 頁面設定（支援手機響應式寬度）
 st.set_page_config(
@@ -263,17 +263,24 @@ BASE_SOCCER_ELO = {
     "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0,
     "RB Leipzig": 1875.0, "Stuttgart": 1835.0, "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0,
     "Wolfsburg": 1725.0, "Mainz": 1705.0, "Augsburg": 1705.0, "Werder Bremen": 1715.0,
+    "Union Berlin": 1700.0, "St. Pauli": 1640.0, "Hoffenheim": 1710.0, "Heidenheim": 1680.0,
+    "Borussia Monchengladbach": 1710.0, "Bochum": 1645.0, "Holstein Kiel": 1620.0,
     "Inter": 1975.0, "Internazionale": 1975.0, "Atalanta": 1885.0, "Juventus": 1875.0,
     "Milan": 1865.0, "AC Milan": 1865.0, "Roma": 1805.0, "Lazio": 1805.0, "Napoli": 1825.0,
-    "Bologna": 1815.0, "Fiorentina": 1775.0, "Torino": 1755.0,
+    "Bologna": 1815.0, "Fiorentina": 1775.0, "Torino": 1755.0, "Monza": 1680.0, "Venezia": 1630.0,
+    "Como": 1640.0, "Parma": 1650.0, "Empoli": 1660.0, "Cagliari": 1655.0, "Verona": 1660.0, "Lecce": 1650.0, "Udinese": 1670.0, "Genoa": 1685.0,
     "Paris Saint-Germain": 1925.0, "Monaco": 1835.0, "Lille": 1815.0, "Marseille": 1785.0,
-    "Lyon": 1775.0, "Nice": 1775.0, "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0
+    "Lyon": 1775.0, "Nice": 1775.0, "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0,
+    "Saint-Etienne": 1645.0, "Le Havre": 1650.0, "Auxerre": 1650.0, "Angers": 1635.0, "Nantes": 1670.0, "Toulouse": 1690.0, "Strasbourg": 1685.0
 }
 
 SOCCER_LEAGUES = {
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 英格蘭超級聯賽 (Premier League)": "eng.1", "🇪🇸 西班牙甲級聯賽 (La Liga)": "esp.1",
-    "🇩🇪 德國甲級聯賽 (Bundesliga)": "ger.1", "🇮🇹 義大利甲級聯賽 (Serie A)": "ita.1",
-    "🇫🇷 法國甲級聯賽 (Ligue 1)": "fra.1", "🏆 歐洲冠軍聯賽 (UEFA Champions League)": "uefa.champions"
+    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 英格蘭超級聯賽 (Premier League)": "eng.1",
+    "🇪🇸 西班牙甲級聯賽 (La Liga)": "esp.1",
+    "🇩🇪 德國甲級聯賽 (Bundesliga)": "ger.1",
+    "🇮🇹 義大利甲級聯賽 (Serie A)": "ita.1",
+    "🇫🇷 法國甲級聯賽 (Ligue 1)": "fra.1",
+    "🏆 歐洲冠軍聯賽 (UEFA Champions League)": "uefa.champions"
 }
 
 SOCCER_GOALS = {
@@ -285,9 +292,9 @@ SOCCER_GOALS = {
 SOCCER_CN = {
     "Manchester City": "曼城", "Arsenal": "兵工廠", "Liverpool": "利物浦", "Chelsea": "切爾西", "Tottenham Hotspur": "熱刺", "Tottenham": "熱刺", "Manchester United": "曼聯", "Newcastle United": "紐卡索聯", "Newcastle": "紐卡索聯", "Aston Villa": "阿斯頓維拉", "Brighton & Hove Albion": "布萊頓", "Brighton": "布萊頓", "West Ham United": "西漢姆聯", "West Ham": "西漢姆聯", "Fulham": "富勒姆", "Wolverhampton Wanderers": "狼隊", "Wolves": "狼隊", "Everton": "艾佛頓", "Brentford": "布倫特福德", "Crystal Palace": "水晶宮", "Bournemouth": "伯恩茅斯", "Nottingham Forest": "諾丁漢森林", "Leicester City": "萊斯特城", "Leicester": "萊斯特城", "Ipswich Town": "伊普斯維奇", "Ipswich": "伊普斯維奇", "Southampton": "南安普敦",
     "Real Madrid": "皇家馬德里", "Barcelona": "巴塞隆納", "Atlético Madrid": "馬德里競技", "Atletico Madrid": "馬德里競技", "Girona": "赫羅納", "Athletic Club": "畢爾包競技", "Athletic": "畢爾包競技", "Real Sociedad": "皇家社會", "Real Betis": "皇家貝提斯", "Villarreal": "比利亞雷亞爾", "Sevilla": "塞維亞", "Valencia": "瓦倫西亞", "Osasuna": "奧薩蘇納", "Celta Vigo": "塞爾塔", "Celta de Vigo": "塞爾塔", "Celta": "塞爾塔", "Mallorca": "馬約卡", "Rayo Vallecano": "巴列卡諾", "Las Palmas": "拉斯帕爾馬斯", "Getafe": "赫塔菲", "Alavés": "阿拉維斯", "Alaves": "阿拉維斯", "Espanyol": "西班牙人", "Leganés": "萊加內斯", "Leganes": "萊加內斯", "Real Valladolid": "瓦拉多利德", "Valladolid": "瓦拉多利德",
-    "Bayern Munich": "拜仁慕尼黑", "Bayer Leverkusen": "勒沃庫森", "Borussia Dortmund": "多特蒙德", "RB Leipzig": "RB萊比錫", "Stuttgart": "斯圖加特", "Eintracht Frankfurt": "法蘭克福", "Freiburg": "弗萊堡", "Wolfsburg": "狼堡", "Mainz": "梅因斯", "Augsburg": "奧格斯堡", "Werder Bremen": "雲達不萊梅",
-    "Inter": "國際米蘭", "Internazionale": "國際米蘭", "Inter Milan": "國際米蘭", "Atalanta": "亞特蘭大", "Juventus": "尤文圖斯", "Milan": "AC米蘭", "AC Milan": "AC米蘭", "Roma": "羅馬", "Lazio": "拉齊奧", "Napoli": "拿坡里", "Bologna": "波隆那", "Fiorentina": "佛倫提那", "Torino": "都靈",
-    "Paris Saint-Germain": "巴黎聖日耳曼", "Monaco": "摩納哥", "Lille": "里爾", "Marseille": "馬賽", "Lyon": "里昂", "Nice": "尼斯", "Lens": "朗斯", "Brest": "布雷斯特", "Rennes": "雷恩"
+    "Bayern Munich": "拜仁慕尼黑", "Bayer Leverkusen": "勒沃庫森", "Borussia Dortmund": "多特蒙德", "RB Leipzig": "RB萊比錫", "Stuttgart": "斯圖加特", "Eintracht Frankfurt": "法蘭克福", "Freiburg": "弗萊堡", "Wolfsburg": "狼堡", "Mainz": "梅因斯", "Mainz 05": "梅因斯", "Augsburg": "奧格斯堡", "Werder Bremen": "雲達不萊梅", "1. FC Union Berlin": "柏林聯", "Union Berlin": "柏林聯", "FC St. Pauli": "聖保利", "St. Pauli": "聖保利", "TSG Hoffenheim": "霍芬海姆", "Hoffenheim": "霍芬海姆", "1. FC Heidenheim": "海登海姆", "Heidenheim": "海登海姆", "Borussia Mönchengladbach": "門興", "Borussia Monchengladbach": "門興", "VfL Bochum": "波鴻", "Bochum": "波鴻", "Holstein Kiel": "基爾",
+    "Inter": "國際米蘭", "Internazionale": "國際米蘭", "Inter Milan": "國際米蘭", "Atalanta": "亞特蘭大", "Juventus": "尤文圖斯", "Milan": "AC米蘭", "AC Milan": "AC米蘭", "Roma": "羅馬", "Lazio": "拉齊奧", "Napoli": "拿坡里", "Bologna": "波隆那", "Fiorentina": "佛倫提那", "Torino": "都靈", "Monza": "蒙扎", "Venezia": "威尼斯", "Como": "科莫", "Parma": "帕爾馬", "Empoli": "恩波利", "Cagliari": "卡利亞里", "Hellas Verona": "維羅納", "Verona": "維羅納", "Lecce": "萊切", "Udinese": "烏迪內斯", "Genoa": "熱那亞",
+    "Paris Saint-Germain": "巴黎聖日耳曼", "Monaco": "摩納哥", "Lille": "里爾", "Marseille": "馬賽", "Lyon": "里昂", "Nice": "尼斯", "Lens": "朗斯", "Brest": "布雷斯特", "Rennes": "雷恩", "Saint-Étienne": "聖埃蒂安", "Saint-Etienne": "聖埃蒂安", "Le Havre": "勒阿弗爾", "Auxerre": "歐塞爾", "Angers": "昂熱", "Nantes": "南特", "Toulouse": "土魯斯", "Strasbourg": "史特拉斯堡"
 }
 
 SOCCER_INPLAY_DROPDOWN = {f"【足球】{v} ({k})": k for k, v in SOCCER_CN.items() if k in BASE_SOCCER_ELO}
@@ -318,37 +325,65 @@ def fetch_clubelo_cached(date_str: str):
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_soccer_matches_cached(date_str: str):
     target_dt = datetime.strptime(date_str, "%Y-%m-%d")
-    date_formatted = target_dt.strftime("%Y%m%d")
-    range_formatted = f"{(target_dt - timedelta(days=1)).strftime('%Y%m%d')}-{(target_dt + timedelta(days=1)).strftime('%Y%m%d')}"
+    # ESPN 足球 API 不支援連字號區間，改為抓取 前一天、當天、後一天 單日參數
+    dates_to_query = [
+        (target_dt - timedelta(days=1)).strftime("%Y%m%d"),
+        target_dt.strftime("%Y%m%d"),
+        (target_dt + timedelta(days=1)).strftime("%Y%m%d")
+    ]
     
     all_matches = {}
     session = requests.Session()
     session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+    
     for league_name, league_slug in SOCCER_LEAGUES.items():
+        seen_event_ids = set()
         events = []
-        url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={date_formatted}"
+
+        # 策略 1：抓取當前輪次（不帶 dates 參數會回傳當前 Matchweek 整輪賽事，確保開盤即抓到）
         try:
-            res = session.get(url, timeout=5).json()
-            events = res.get("events", [])
+            url_default = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?limit=100"
+            res = session.get(url_default, timeout=5).json()
+            for ev in res.get("events", []):
+                ev_id = ev.get("id")
+                if ev_id and ev_id not in seen_event_ids:
+                    seen_event_ids.add(ev_id)
+                    events.append(ev)
         except Exception:
             pass
-            
-        if not events:
-            url_range = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={range_formatted}"
+
+        # 策略 2：針對前、當、後三天各別單日查詢，補足非當前輪次排程
+        for d_str in dates_to_query:
             try:
-                res_range = session.get(url_range, timeout=5).json()
-                raw_events = res_range.get("events", [])
-                for ev in raw_events:
-                    ev_date = ev.get("date", "")
-                    if date_str in ev_date or date_formatted in ev_date.replace("-", ""):
+                url_date = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={d_str}&limit=100"
+                res = session.get(url_date, timeout=5).json()
+                for ev in res.get("events", []):
+                    ev_id = ev.get("id")
+                    if ev_id and ev_id not in seen_event_ids:
+                        seen_event_ids.add(ev_id)
                         events.append(ev)
-                if not events and raw_events:
-                    events = raw_events
             except Exception:
                 pass
 
         matches = []
         for event in events:
+            ev_date_raw = event.get("date", "")
+            is_match_day = False
+            
+            # 精確時區對齊：將 UTC 時間轉為台灣時間 (Asia/Taipei UTC+8)
+            if ev_date_raw:
+                try:
+                    dt_utc = datetime.fromisoformat(ev_date_raw.replace("Z", "+00:00"))
+                    dt_tw = dt_utc.astimezone(timezone(timedelta(hours=8)))
+                    if dt_tw.strftime("%Y-%m-%d") == date_str:
+                        is_match_day = True
+                except Exception:
+                    if date_str in ev_date_raw:
+                        is_match_day = True
+            
+            if not is_match_day:
+                continue
+
             comp = event.get("competitions", [{}])[0]
             status_obj = comp.get("status", {}).get("type", {})
             api_state = status_obj.get("state", "pre")
@@ -357,7 +392,9 @@ def fetch_soccer_matches_cached(date_str: str):
             h_team, a_team = "TBD", "TBD"
             h_score, a_score = None, None
             for c in comp.get("competitors", []):
-                t = c.get("team", {}).get("name", "")
+                t_obj = c.get("team", {})
+                # 解決隊名提取衝突：優先取 displayName，無則 fallback 至 name
+                t = t_obj.get("displayName") or t_obj.get("name") or t_obj.get("shortDisplayName", "")
                 if c.get("homeAway") == "home":
                     h_team = t
                     if is_completed or api_state in ['in', 'post']: h_score = c.get("score")
@@ -464,7 +501,6 @@ def generate_soccer_report_cached(date_str: str):
 
             p_btts = f"是<br>({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否<br>({(1-btts_p)*100:.1f}%)"
             
-            # 【視覺優化】大幅縮小 Padding，壓縮行高，全域白底並智慧斷行
             cell_base = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
             
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
@@ -507,7 +543,6 @@ def generate_soccer_report_cached(date_str: str):
                 except Exception:
                     pass
             
-            # 【視覺優化】字體全面放大 2px~3px
             row_html = f'''<tr>
                 <td style="{cell_base} font-weight: bold; font-size: 15px; color: #0f172a;">{h_cn}<br><span style="font-size:12px; color:#64748b;">vs</span><br>{a_cn}</td>
                 <td style="{cell_base} font-size: 13.5px; color: #334155;">{int(h_elo)}<br>vs {int(a_elo)}</td>
@@ -749,8 +784,11 @@ class AutomatedMLBQuantSystem:
 
     def fetch_espn_mlb_odds(self, date_str: str):
         target_dt = datetime.strptime(date_str, "%Y-%m-%d")
-        date_formatted = target_dt.strftime("%Y%m%d")
-        range_formatted = f"{(target_dt - timedelta(days=1)).strftime('%Y%m%d')}-{(target_dt + timedelta(days=1)).strftime('%Y%m%d')}"
+        dates_to_query = [
+            (target_dt - timedelta(days=1)).strftime("%Y%m%d"),
+            target_dt.strftime("%Y%m%d"),
+            (target_dt + timedelta(days=1)).strftime("%Y%m%d")
+        ]
         
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         odds_dict = {}
@@ -771,16 +809,13 @@ class AutomatedMLBQuantSystem:
                         if h_name and a_name:
                             odds_dict[(a_name, h_name)] = float(ou)
 
-        url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_formatted}"
-        try:
-            res = requests.get(url, headers=headers, timeout=5).json()
-            parse_odds(res)
-            if not odds_dict:
-                url_range = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={range_formatted}"
-                res_range = requests.get(url_range, headers=headers, timeout=5).json()
-                parse_odds(res_range)
-        except Exception:
-            pass
+        for d_str in dates_to_query:
+            url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={d_str}"
+            try:
+                res = requests.get(url, headers=headers, timeout=5).json()
+                parse_odds(res)
+            except Exception:
+                pass
         return odds_dict
 
     def get_games_and_scores(self, date_str: str):
@@ -788,20 +823,25 @@ class AutomatedMLBQuantSystem:
         range_start = (target_dt - timedelta(days=1)).strftime('%Y-%m-%d')
         range_end = (target_dt + timedelta(days=1)).strftime('%Y-%m-%d')
         
-        url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}&hydrate=probablePitcher,linescore,officials"
+        url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={range_start}&endDate={range_end}&hydrate=probablePitcher,linescore,officials"
         try:
             res = requests.get(url, timeout=5).json()
-            if not res.get("dates"):
-                url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={range_start}&endDate={range_end}&hydrate=probablePitcher,linescore,officials"
-                res = requests.get(url, timeout=5).json()
         except Exception:
             return pd.DataFrame()
         
         games = []
         for d in res.get("dates", []):
-            if date_str not in d.get("date", ""):
-                pass
             for game in d.get("games", []):
+                game_date_utc = game.get("gameDate", "")
+                if game_date_utc:
+                    try:
+                        dt_tw = pd.to_datetime(game_date_utc).tz_convert('Asia/Taipei')
+                        if dt_tw.strftime("%Y-%m-%d") != date_str:
+                            continue
+                    except Exception:
+                        if date_str not in d.get("date", ""):
+                            continue
+                            
                 status = game.get("status", {}).get("abstractGameState", "Preview")
                 api_state = "pre" if status in ["Preview", "Pre-Game"] else ("Final" if status == "Final" else "Live")
                 away_score = game["teams"]["away"].get("score", None)
@@ -923,7 +963,6 @@ class AutomatedMLBQuantSystem:
             ml_text = f"{model_ml_pick_name} {ml_pick_type}<br>({max(home_ml_prob, away_ml_prob)*100:.1f}%)"
             ou_text = f"{model_ou_pick} {game_market_line}<br>({max(over_prob, under_prob)*100:.1f}%)"
             
-            # 【手機版排版關鍵】使用 normal 與 line-height，完全不重疊且字體放大
             cell_base = "padding: 6px 4px; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle; white-space: normal; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"
             ml_style = f"{cell_base} color: #0f172a; font-weight: 600;"
             spread_style = f"{cell_base} color: #0f172a; font-weight: 600;"
