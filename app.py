@@ -19,14 +19,14 @@ st.set_page_config(
 )
 
 # ================= 品牌防偽客製化設定 =================
-BRAND_NAME = "維大力"              # 你的專屬品牌名稱
-BRAND_TAGLINE = "官方唯一正版認證 ｜ 賽事數據量化分析" # 專屬標語
-CUSTOM_LOGO_URL = ""               # 若有圖片網址可填入，留空則自動讀取 GitHub 上的 logo.jpg 或 logo.png
-WATERMARK_TEXT = "維大力 官方正版認證" # 背景防偽浮水印文字
+BRAND_NAME = "維大力"              
+BRAND_TAGLINE = "官方唯一正版認證 ｜ 賽事數據量化分析" 
+CUSTOM_LOGO_URL = ""               
+WATERMARK_TEXT = "維大力 官方正版認證" 
 
 # ================= 密碼與金鑰設定 =================
-MASTER_PASSCODE = "ADMIN999"      # 管理員萬能通行碼
-SECRET_SALT = "MySecretKey2026"  # 專屬私鑰 (防偽簽名)
+MASTER_PASSCODE = "ADMIN999"      
+SECRET_SALT = "MySecretKey2026"  
 
 # ================= 尾盤自動封存資料庫 (SQLite) =================
 DB_FILE = "closing_odds.db"
@@ -256,10 +256,13 @@ BASE_SOCCER_ELO = {
     "Las Palmas": 1650.0, "Getafe": 1660.0, "Alaves": 1660.0, "Leganes": 1635.0,
     "Espanyol": 1655.0, "Valladolid": 1625.0,
     "Manchester City": 2020.0, "Arsenal": 1985.0, "Liverpool": 1970.0, "Chelsea": 1835.0,
-    "Tottenham": 1815.0, "Newcastle": 1815.0, "Aston Villa": 1835.0, "Manchester United": 1785.0,
-    "Brighton": 1775.0, "West Ham": 1725.0, "Fulham": 1715.0, "Bournemouth": 1705.0,
-    "Brentford": 1705.0, "Crystal Palace": 1715.0, "Wolves": 1685.0, "Everton": 1690.0,
-    "Nottingham Forest": 1685.0, "Leicester": 1675.0, "Southampton": 1635.0, "Ipswich": 1615.0,
+    "Tottenham": 1815.0, "Tottenham Hotspur": 1815.0, "Newcastle": 1815.0, "Newcastle United": 1815.0,
+    "Aston Villa": 1835.0, "Manchester United": 1785.0, "Brighton": 1775.0, "Brighton & Hove Albion": 1775.0,
+    "West Ham": 1725.0, "West Ham United": 1725.0, "Fulham": 1715.0, "Bournemouth": 1705.0,
+    "Brentford": 1705.0, "Crystal Palace": 1715.0, "Wolves": 1685.0, "Wolverhampton Wanderers": 1685.0,
+    "Everton": 1690.0, "Nottingham Forest": 1685.0, "Leicester": 1675.0, "Southampton": 1635.0,
+    "Ipswich": 1615.0, "Ipswich Town": 1615.0,
+    "Hull City": 1650.0, "Hull": 1650.0, "Sunderland": 1660.0, "Coventry City": 1640.0, "Coventry": 1640.0, "Leeds United": 1670.0, "Leeds": 1670.0,
     "Bayern Munich": 1955.0, "Bayer Leverkusen": 1945.0, "Borussia Dortmund": 1875.0,
     "RB Leipzig": 1875.0, "Stuttgart": 1835.0, "Eintracht Frankfurt": 1785.0, "Freiburg": 1745.0,
     "Wolfsburg": 1725.0, "Mainz": 1705.0, "Augsburg": 1705.0, "Werder Bremen": 1715.0,
@@ -270,7 +273,6 @@ BASE_SOCCER_ELO = {
     "Lyon": 1775.0, "Nice": 1775.0, "Lens": 1765.0, "Brest": 1765.0, "Rennes": 1755.0
 }
 
-# 嚴格鎖定歐洲五大聯賽一級與歐冠
 SOCCER_LEAGUES = {
     "🏴󠁧󠁢󠁥󠁮󠁧󠁿 英格蘭超級聯賽 (Premier League)": "eng.1",
     "🇪🇸 西班牙甲級聯賽 (La Liga)": "esp.1",
@@ -287,11 +289,31 @@ SOCCER_GOALS = {
 }
 
 SOCCER_CN = {
-    "Manchester City": "曼城", "Arsenal": "兵工廠", "Liverpool": "利物浦", "Chelsea": "切爾西", "Tottenham Hotspur": "熱刺", "Tottenham": "熱刺", "Manchester United": "曼聯", "Newcastle United": "紐卡索聯", "Newcastle": "紐卡索聯", "Aston Villa": "阿斯頓維拉", "Brighton & Hove Albion": "布萊頓", "Brighton": "布萊頓", "West Ham United": "西漢姆聯", "West Ham": "西漢姆聯", "Fulham": "富勒姆", "Wolverhampton Wanderers": "狼隊", "Wolves": "狼隊", "Everton": "艾佛頓", "Brentford": "布倫特福德", "Crystal Palace": "水晶宮", "Bournemouth": "伯恩茅斯", "Nottingham Forest": "諾丁漢森林", "Leicester City": "萊斯特城", "Leicester": "萊斯特城", "Ipswich Town": "伊普斯維奇", "Ipswich": "伊普斯維奇", "Southampton": "南安普敦",
-    "Real Madrid": "皇家馬德里", "Barcelona": "巴塞隆納", "Atlético Madrid": "馬德里競技", "Atletico Madrid": "馬德里競技", "Girona": "赫羅納", "Athletic Club": "畢爾包競技", "Athletic": "畢爾包競技", "Real Sociedad": "皇家社會", "Real Betis": "皇家貝提斯", "Villarreal": "比利亞雷亞爾", "Sevilla": "塞維亞", "Valencia": "瓦倫西亞", "Osasuna": "奧薩蘇納", "Celta Vigo": "塞爾塔", "Celta de Vigo": "塞爾塔", "Celta": "塞爾塔", "Mallorca": "馬約卡", "Rayo Vallecano": "巴列卡諾", "Las Palmas": "拉斯帕爾馬斯", "Getafe": "赫塔菲", "Alavés": "阿拉維斯", "Alaves": "阿拉維斯", "Espanyol": "西班牙人", "Leganés": "萊加內斯", "Leganes": "萊加內斯", "Real Valladolid": "瓦拉多利德", "Valladolid": "瓦拉多利德",
-    "Bayern Munich": "拜仁慕尼黑", "Bayer Leverkusen": "勒沃庫森", "Borussia Dortmund": "多特蒙德", "RB Leipzig": "RB萊比錫", "Stuttgart": "斯圖加特", "Eintracht Frankfurt": "法蘭克福", "Freiburg": "弗萊堡", "Wolfsburg": "狼堡", "Mainz": "梅因斯", "Augsburg": "奧格斯堡", "Werder Bremen": "雲達不萊梅",
-    "Inter": "國際米蘭", "Internazionale": "國際米蘭", "Inter Milan": "國際米蘭", "Atalanta": "亞特蘭大", "Juventus": "尤文圖斯", "Milan": "AC米蘭", "AC Milan": "AC米蘭", "Roma": "羅馬", "Lazio": "拉齊奧", "Napoli": "拿坡里", "Bologna": "波隆那", "Fiorentina": "佛倫提那", "Torino": "都靈",
-    "Paris Saint-Germain": "巴黎聖日耳曼", "Monaco": "摩納哥", "Lille": "里爾", "Marseille": "馬賽", "Lyon": "里昂", "Nice": "尼斯", "Lens": "朗斯", "Brest": "布雷斯特", "Rennes": "雷恩"
+    "Manchester City": "曼城", "Arsenal": "兵工廠", "Liverpool": "利物浦", "Chelsea": "切爾西",
+    "Tottenham Hotspur": "熱刺", "Tottenham": "熱刺", "Manchester United": "曼聯",
+    "Newcastle United": "紐卡索聯", "Newcastle": "紐卡索聯", "Aston Villa": "阿斯頓維拉",
+    "Brighton & Hove Albion": "布萊頓", "Brighton": "布萊頓", "West Ham United": "西漢姆聯", "West Ham": "西漢姆聯",
+    "Fulham": "富勒姆", "Wolverhampton Wanderers": "狼隊", "Wolves": "狼隊", "Everton": "艾佛頓",
+    "Brentford": "布倫特福德", "Crystal Palace": "水晶宮", "Bournemouth": "伯恩茅斯",
+    "Nottingham Forest": "諾丁漢森林", "Leicester City": "萊斯特城", "Leicester": "萊斯特城",
+    "Ipswich Town": "葉士域治", "Ipswich": "葉士域治", "Southampton": "南安普敦",
+    "Hull City": "赫爾城", "Hull": "赫爾城", "Sunderland": "桑德蘭", "Coventry City": "科芬特里城",
+    "Coventry": "科芬特里城", "Leeds United": "里茲聯", "Leeds": "里茲聯",
+    "Real Madrid": "皇家馬德里", "Barcelona": "巴塞隆納", "Atlético Madrid": "馬德里競技", "Atletico Madrid": "馬德里競技",
+    "Girona": "赫羅納", "Athletic Club": "畢爾包競技", "Athletic": "畢爾包競技", "Real Sociedad": "皇家社會",
+    "Real Betis": "皇家貝提斯", "Villarreal": "比利亞雷亞爾", "Sevilla": "塞維亞", "Valencia": "瓦倫西亞",
+    "Osasuna": "奧薩蘇納", "Celta Vigo": "塞爾塔", "Celta de Vigo": "塞爾塔", "Celta": "塞爾塔",
+    "Mallorca": "馬約卡", "Rayo Vallecano": "巴列卡諾", "Las Palmas": "拉斯帕爾馬斯", "Getafe": "赫塔菲",
+    "Alavés": "阿拉維斯", "Alaves": "阿拉維斯", "Espanyol": "西班牙人", "Leganés": "萊加內斯",
+    "Leganes": "萊加內斯", "Real Valladolid": "瓦拉多利德", "Valladolid": "瓦拉多利德",
+    "Bayern Munich": "拜仁慕尼黑", "Bayer Leverkusen": "勒沃庫森", "Borussia Dortmund": "多特蒙德",
+    "RB Leipzig": "RB萊比錫", "Stuttgart": "斯圖加特", "Eintracht Frankfurt": "法蘭克福", "Freiburg": "弗萊堡",
+    "Wolfsburg": "狼堡", "Mainz": "梅因斯", "Augsburg": "奧格斯堡", "Werder Bremen": "雲達不萊梅",
+    "Inter": "國際米蘭", "Internazionale": "國際米蘭", "Inter Milan": "國際米蘭", "Atalanta": "亞特蘭大",
+    "Juventus": "尤文圖斯", "Milan": "AC米蘭", "AC Milan": "AC米蘭", "Roma": "羅馬", "Lazio": "拉齊奧",
+    "Napoli": "拿坡里", "Bologna": "波隆那", "Fiorentina": "佛倫提那", "Torino": "都靈",
+    "Paris Saint-Germain": "巴黎聖日耳曼", "Monaco": "摩納哥", "Lille": "里爾", "Marseille": "馬賽",
+    "Lyon": "里昂", "Nice": "尼斯", "Lens": "朗斯", "Brest": "布雷斯特", "Rennes": "雷恩"
 }
 
 SOCCER_INPLAY_DROPDOWN = {f"【足球】{v} ({k})": k for k, v in SOCCER_CN.items() if k in BASE_SOCCER_ELO}
@@ -315,8 +337,7 @@ def fetch_clubelo_cached(date_str: str):
             continue
     return elo_db
 
-# 核心修復：徹底解決 ESPN API 查詢與跨時區過濾錯誤
-def fetch_soccer_matches_core(date_str: str):
+def fetch_soccer_matches_live(date_str: str):
     target_dt = datetime.strptime(date_str, "%Y-%m-%d")
     dates_to_query = [
         (target_dt - timedelta(days=1)).strftime("%Y%m%d"),
@@ -329,39 +350,43 @@ def fetch_soccer_matches_core(date_str: str):
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7"
+        "Referer": "https://www.espn.com/",
+        "Origin": "https://www.espn.com"
     })
     
     for league_name, league_slug in SOCCER_LEAGUES.items():
-        seen_event_ids = set()
+        seen_ids = set()
         raw_events = []
-
-        # 策略 1：拉取即時 Matchweek（解決 ESPN 日期索引缺失問題）
-        try:
-            url_default = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?limit=100"
-            r = session.get(url_default, timeout=5)
-            if r.status_code == 200:
-                for ev in r.json().get("events", []):
-                    eid = ev.get("id")
-                    if eid and eid not in seen_event_ids:
-                        seen_event_ids.add(eid)
-                        raw_events.append(ev)
-        except Exception:
-            pass
-
-        # 策略 2：依日前後 3 天逐日單獨查詢（避免連字號語法失效）
-        for d_str in dates_to_query:
+        base_hosts = ["https://site.web.api.espn.com", "https://site.api.espn.com"]
+        
+        for host in base_hosts:
             try:
-                url_date = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={d_str}&limit=100"
-                r = session.get(url_date, timeout=5)
+                u_curr = f"{host}/apis/site/v2/sports/soccer/{league_slug}/scoreboard?limit=100"
+                r = session.get(u_curr, timeout=4)
                 if r.status_code == 200:
                     for ev in r.json().get("events", []):
                         eid = ev.get("id")
-                        if eid and eid not in seen_event_ids:
-                            seen_event_ids.add(eid)
+                        if eid and eid not in seen_ids:
+                            seen_ids.add(eid)
                             raw_events.append(ev)
             except Exception:
                 pass
+                
+            for d in dates_to_query:
+                try:
+                    u_date = f"{host}/apis/site/v2/sports/soccer/{league_slug}/scoreboard?dates={d}&limit=100"
+                    r = session.get(u_date, timeout=4)
+                    if r.status_code == 200:
+                        for ev in r.json().get("events", []):
+                            eid = ev.get("id")
+                            if eid and eid not in seen_ids:
+                                seen_ids.add(eid)
+                                raw_events.append(ev)
+                except Exception:
+                    pass
+            
+            if raw_events:
+                break
 
         matches = []
         for event in raw_events:
@@ -369,14 +394,13 @@ def fetch_soccer_matches_core(date_str: str):
             if not ev_date_raw:
                 continue
                 
-            # 策略 3：使用 pandas 強制標準化轉換至台灣時間 (Asia/Taipei UTC+8)
             try:
-                dt_tw = pd.to_datetime(ev_date_raw, utc=True).tz_convert('Asia/Taipei')
+                dt_utc = datetime.fromisoformat(ev_date_raw.replace("Z", "+00:00"))
+                dt_tw = dt_utc.astimezone(timezone(timedelta(hours=8)))
                 event_date_tw = dt_tw.strftime("%Y-%m-%d")
             except Exception:
                 event_date_tw = ev_date_raw[:10]
 
-            # 嚴格判定：只收錄符合使用者所選台灣日期的比賽
             if event_date_tw != date_str:
                 continue
 
@@ -389,13 +413,15 @@ def fetch_soccer_matches_core(date_str: str):
             h_score, a_score = None, None
             for c in comp.get("competitors", []):
                 t_obj = c.get("team", {})
-                t_name = t_obj.get("displayName") or t_obj.get("name") or "TBD"
+                t = t_obj.get("name") or t_obj.get("displayName") or t_obj.get("shortDisplayName", "TBD")
                 if c.get("homeAway") == "home":
-                    h_team = t_name
-                    if is_completed or api_state in ['in', 'post']: h_score = c.get("score")
+                    h_team = t
+                    if is_completed or api_state in ['in', 'post']: 
+                        h_score = c.get("score")
                 else:
-                    a_team = t_name
-                    if is_completed or api_state in ['in', 'post']: a_score = c.get("score")
+                    a_team = t
+                    if is_completed or api_state in ['in', 'post']: 
+                        a_score = c.get("score")
                     
             act_str = f"{h_score}:{a_score}" if h_score is not None else "未完賽"
             
@@ -410,18 +436,25 @@ def fetch_soccer_matches_core(date_str: str):
                     pass
             
             final_ou_line = sync_odds("soccer", date_str, h_team, a_team, api_state, api_ou)
-            matches.append({"home": h_team, "away": a_team, "score": act_str, "league": league_slug, "ou_line": final_ou_line})
+            matches.append({
+                "home": h_team, 
+                "away": a_team, 
+                "score": act_str, 
+                "league": league_slug, 
+                "ou_line": final_ou_line
+            })
             
         if matches:
             all_matches[league_name] = matches
             
     return all_matches
 
-def generate_soccer_report_cached(date_str: str):
+def generate_soccer_report(date_str: str):
     elo_db = fetch_clubelo_cached(date_str)
-    all_matches = fetch_soccer_matches_core(date_str)
+    all_matches = fetch_soccer_matches_live(date_str)
     tot = sum(len(m) for m in all_matches.values())
-    if tot == 0: return 0, len(elo_db), ""
+    if tot == 0: 
+        return 0, len(elo_db), ""
     
     html_blocks = []
     for l_name, matches in all_matches.items():
@@ -975,7 +1008,7 @@ class AutomatedMLBQuantSystem:
                     spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff > 1.5 else "background-color: #fee2e2; color: #b91c1c;"
                 elif spread_target == "AWAY_P15":
                     spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff < 1.5 else "background-color: #fee2e2; color: #b91c1c;"
-                elif spread_target == "AWAY_M15":
+                elif spread_target == "AWAY_M1":
                     spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff < -1.5 else "background-color: #fee2e2; color: #b91c1c;"
                 elif spread_target == "HOME_P15":
                     spread_style += "background-color: #dcfce7; color: #15803d;" if actual_diff > -1.5 else "background-color: #fee2e2; color: #b91c1c;"
@@ -1341,12 +1374,22 @@ def dashboard_view():
 
         if selected_sport == "⚽ 歐洲頂級足球":
             st.subheader("⚽ 歐洲五大聯賽與歐冠量化定價 (尾盤自動鎖死防護)")
-            selected_date = st.date_input("選擇足球賽事日期", value=date.today(), key="soccer_date")
+            
+            c_d1, c_d2 = st.columns([3, 1])
+            with c_d1:
+                selected_date = st.date_input("選擇足球賽事日期", value=date.today(), key="soccer_date")
+            with c_d2:
+                st.write("")
+                st.write("")
+                if st.button("🔄 強制重抓/清空快取", use_container_width=True):
+                    st.cache_data.clear()
+                    st.rerun()
+                    
             date_str = selected_date.strftime("%Y-%m-%d")
 
             if st.button("🔍 獲取足球即時量化與回測報告", use_container_width=True, type="primary"):
                 with st.spinner(f"正在同步 ClubElo 與 ESPN 盤口數據庫 {date_str}..."):
-                    count, elo_len, report_html = generate_soccer_report_cached(date_str)
+                    count, elo_len, report_html = generate_soccer_report(date_str)
                     if count == 0:
                         st.warning(f"📅 【{date_str}】 當日歐洲五大聯賽與歐冠「無比賽場次」。")
                     else:
