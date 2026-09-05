@@ -146,7 +146,24 @@ def apply_branding_css():
     """, unsafe_allow_html=True)
 
 def render_brand_header():
-    logo_html = '<div style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; margin-right: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);">🛡️</div>'
+    logo_html = ""
+    if CUSTOM_LOGO_URL:
+        logo_html = f'<img src="{CUSTOM_LOGO_URL}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #f59e0b; margin-right: 12px; object-fit: cover;">'
+    else:
+        for ext in ["jpg", "jpeg", "png", "webp", "jgp"]:
+            filename = f"logo.{ext}"
+            if os.path.exists(filename):
+                try:
+                    with open(filename, "rb") as img_f:
+                        encoded = base64.b64encode(img_f.read()).decode()
+                    mime_type = "jpeg" if ext in ["jpg", "jpeg", "jgp"] else ext
+                    logo_html = f'<img src="data:image/{mime_type};base64,{encoded}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #f59e0b; margin-right: 12px; object-fit: cover;">'
+                    break
+                except Exception:
+                    pass
+        if not logo_html:
+            logo_html = '<div style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; margin-right: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);">🛡️</div>'
+
     header_html = f"""
     <div style="background: linear-gradient(90deg, #0f172a, #1e293b); border: 1px solid #334155; padding: 12px 16px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
         <div style="display: flex; align-items: center;">
@@ -448,7 +465,6 @@ def generate_soccer_report(date_str: str):
             p_ou, model_ou_target = (f"大 {live_ou}<br>({ov_p*100:.1f}%)", "OVER") if ov_p >= un_p else (f"小 {live_ou}<br>({un_p*100:.1f}%)", "UNDER")
             p_btts = f"是<br>({btts_p*100:.1f}%)" if btts_p >= 0.5 else f"否<br>({(1-btts_p)*100:.1f}%)"
             
-            # 預估正確比分推薦計算（取模擬次數最多的前兩個高機率比分）
             score_counts = pd.Series(list(zip(hg, ag))).value_counts().head(1)
             pred_score_str = f"{score_counts.index[0][0]} : {score_counts.index[0][1]}" if not score_counts.empty else "1 : 1"
 
@@ -489,7 +505,10 @@ def generate_soccer_report(date_str: str):
                         ou_style += "background-color: #fee2e2; color: #b91c1c;" 
                     
                     btts_style += "background-color: #dcfce7; color: #15803d;" if (h_act > 0 and a_act > 0) == (btts_p >= 0.5) else "background-color: #fee2e2; color: #b91c1c;"
-                    score_style += "background-color: #dcfce7; color: #15803d;" if pred_score_str == f"{a_act} : {h_act}" or pred_score_str == f"{h_act} : {a_act}" else ""
+                    
+                    # 嚴格正比位置比對：預測「主進球 : 客進球」必須與真實「主比分 : 客比分」完全相符
+                    pred_h_g, pred_a_g = map(int, pred_score_str.split(":"))
+                    score_style += "background-color: #dcfce7; color: #15803d;" if (pred_h_g == h_act and pred_a_g == a_act) else "background-color: #fee2e2; color: #b91c1c;"
                 except Exception:
                     pass
             
@@ -506,7 +525,6 @@ def generate_soccer_report(date_str: str):
             </tr>'''
             rows.append(row_html)
             
-        # 歐洲足球表格：加入固定欄寬 <colgroup> 確保跨聯賽完美對齊
         t_block = f'''
         <div style="margin-bottom: 22px; width: 100%; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">
             <div style="background: linear-gradient(90deg, #0f172a, #334155); color: #ffffff; padding: 9px 14px; border-radius: 6px 6px 0 0; font-size: 14px; font-weight: bold; display: flex; align-items: center;">
@@ -824,7 +842,6 @@ class AutomatedMLBQuantSystem:
                 actual_score_str = f"{a_act} : {h_act}"
                 ml_style += "background-color: #dcfce7; color: #15803d;" if ml_target == ("HOME" if h_act > a_act else "AWAY") else "background-color: #fee2e2; color: #b91c1c;"
                 
-                # 徹底修復 MLB 主客讓分上色邏輯
                 if spread_target == "HOME_M15": hit_spread = (h_act - a_act > 1.5)
                 elif spread_target == "HOME_P15": hit_spread = (h_act - a_act > -1.5)
                 elif spread_target == "AWAY_M15": hit_spread = (a_act - h_act > 1.5)
